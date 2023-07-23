@@ -6,12 +6,12 @@ sec1_msg: db "Hello, sector 1!", 0
 diskNum:  db 0
 
 print:
-	push	bx
-	push	cx
-	push	dx
-	push	di
+    push	bx
+    push	cx
+    push	dx
+    push	di
 
-    
+
     mov ah, 0Eh
     mov cx, 1
 .loop:
@@ -22,10 +22,10 @@ print:
     jmp .loop
 .done:
 
-	pop	di
-	pop	dx
-	pop	cx
-	pop	bx
+    pop	di
+    pop	dx
+    pop	cx
+    pop	bx
     ret 
 
 println:
@@ -66,14 +66,14 @@ start:
     ; Prepare to read disk sectors by setting up ES:BX location
     mov ax, 0
     mov es, ax
-    mov bx, 8000h
+    mov bx, 7E00h
     
 ReadDisk:
     mov ax, 0             ; Reset floppy controller
     mov dl, 0
     int 13h
     nop
-    
+
     mov ah, 2             ; Read sectors function
     mov al, 1             ; Read 1 sector
     mov dl, [diskNum]     ; select the disk from earlier
@@ -81,25 +81,25 @@ ReadDisk:
     mov ch, 0             ; cylinder #0
     mov dh, 0             ; head #0
     int 13h
-    
+
     ; Show operation status code via teletype:
     mov bh, '0'
     add bh, ah
     mov al, bh    ; BH = '0' + (ReturnCode)
-    
+
     mov ah, 0eh
     mov cx, 1
     int 10h
-    
+
 .ReadFailure:
     jc .ReadFailure
-    
+
     jmp 0x0000:stage2
 
     
 times  0200h - 2 - ($ - $$)  db 0
-	db 055h
-	db 0AAh
+    db 055h
+    db 0AAh
 
 ; 7E00h from here on out
 stage2:
