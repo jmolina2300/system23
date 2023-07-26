@@ -1,6 +1,37 @@
 ; Loaded at 0x7C00
 org 7C00h
 	jmp 0x0000:start
+;=============================================================================
+;     Begin DOS 2.0 BPB 
+db 0  
+db 0
+db 0
+db 0
+db 0
+db 0
+BytesPerSector:     dw 512     ; sector size in bytes
+SectorsPerCluster:  db 1       ; sectors per cluster
+ReservedSectors:    dw 1       ; number of reserved sectors for boot code
+NumFATs:            db 2       ; number of FATs 
+NumDirEntries:      dw 224     ; number of directory entries in the FAT
+TotalSectors_16:    dw 2880    ; total sectors (if number fits in 16 bits)
+MediaByte:          db 0xF1    ; media description byte
+NumSectorsPerFAT:   dw 9       ; sectors per FAT
+;=============================================================================
+;     Begin DOS 3.0 BPB stuff
+NumSectorsPerTrack: dw 18             ; sectors per track
+NumHeads:           dw 2              ; heads per cylinder
+NumHiddenSectors:   dd 0              ; number of hidden sectors
+TotalSectors_32:    dd 0              ; total sectors (if its a 32-bit number)
+BootDrive:          db 0              ; drive number (0 for now)
+Unused:             db 0
+BpbVersion:         db 0x29           ; BIOS parameter block version
+VolumeSerial:       dd 0              ; volume serial number
+VolumeLabel:        db "SYSTEM23   "  ; volume label
+FileSystemType:     db "FAT12   "     ; file system type
+
+
+
 
 sec1_msg: db "Hello, sector 1!", 0
 diskNum:  db 0
