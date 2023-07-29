@@ -1,14 +1,10 @@
 ; Loaded at 0x7C00
 org 7C00h
-	jmp 0x0000:start
+	jmp start
+    nop
 ;=============================================================================
 ;     Begin DOS 2.0 BPB 
-db 0  
-db 0
-db 0
-db 0
-db 0
-db 0
+db 0,0,0,0,0,0,0,0
 BytesPerSector:     dw 512     ; sector size in bytes
 SectorsPerCluster:  db 1       ; sectors per cluster
 ReservedSectors:    dw 1       ; number of reserved sectors for boot code
@@ -29,67 +25,22 @@ BpbVersion:         db 0x29           ; BIOS parameter block version
 VolumeSerial:       dd 0              ; volume serial number
 VolumeLabel:        db "SYSTEM23   "  ; volume label
 FileSystemType:     db "FAT12   "     ; file system type
-
-
-
-
-sec1_msg: db "Hello, sector 1!", 0
-diskNum:  db 0
-
-print:
-    push	bx
-    push	cx
-    push	dx
-    push	di
-
-
-    mov ah, 0Eh
-    mov cx, 1
-.loop:
-    lodsb          ; AL = DS:SI
-    cmp al, 0      ; AL == 0?
-    jz .done
-    int 10h
-    jmp .loop
-.done:
-
-    pop	di
-    pop	dx
-    pop	cx
-    pop	bx
-    ret 
-
-println:
-    push ax
-    call print
-    mov al, 0xD ; CR
-    int 10h
-    mov al, 0xA ; LF
-    int 10h
-    pop ax
-    ret
-
-start:  
+;=============================================================================
+;     End BPB
+start:
+    cli
     mov [diskNum], dl ; Save disk number
-    ;cli              
     xor ax, ax
     mov ss, ax
     mov ds, ax
     mov es, ax
     mov sp, 7000h     ; Setup a valid stack before starting
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    
-	mov cx, 1
-	xor dx, dx
-    
+    sti
+
+    mov dh, 20
+    mov dl, 80
+    call cls
+
     
     mov si, sec1_msg
     call println
@@ -127,49 +78,99 @@ ReadDisk:
 
     jmp 0x0000:stage2
 
+
+
+
+
+sec1_msg: db "Hello, sector 1!", 0
+sec2_msg: db  "Hello, sector 2!", 0
+
+diskNum:  db 0
+
+print:
+    push	bx
+    push	cx
+    push	dx
+    push	di
+
+    mov ah, 0Eh
+    mov cx, 1
+.loop:
+    lodsb          ; AL = DS:SI
+    cmp al, 0      ; AL == 0?
+    jz .done
+    int 10h
+    jmp .loop
+.done:
+
+    pop	di
+    pop	dx
+    pop	cx
+    pop	bx
+    ret 
+
+println:
+    push ax
+    call print
+    mov al, 0xD ; CR
+    int 10h
+    mov al, 0xA ; LF
+    int 10h
+    pop ax
+    ret
+
+;*****************************************************************************
+; putchar
+;
+;   Input:  al = the character
+;*****************************************************************************
+putchar:
+    push ax
+    mov ah, 0x0E
+    int 10h
+    pop ax
+    ret
+
+;*****************************************************************************
+; cls (clear screen)
+;
+;   Input: dh = number of rows
+;          dl = number of columns
+;*****************************************************************************
+cls:
+    push cx
+    push bx
+    push ax
+
+    mov bh, COLOR_BLACK  ; Set background color
+    shl bh, 4
+    add bh, COLOR_WHITE  ; Set foreground color
+
+    mov al, 0
+    mov ah, 6    ; Scroll function
+
+    dec dh       ; minus 1 since the row/column numbers are 0-based
+    dec dl
+ 
+    xor ch, ch   ; upper row number = 0
+    xor cl, cl   ; left column = 0
+    int 10h
+
+    ; move cursor to the top left of the screen
+    xor bh,bh    ; BH = page 0
+    xor dh,dh    ; DH = row 0
+    xor dl,dl    ; DL = col 0
+    mov ah, 2    
+    int 10h
+
+    pop ax
+    pop bx
+    pop cx
+    ret
+
     
 times  0200h - 2 - ($ - $$)  db 0
     db 055h
     db 0AAh
 
-; 7E00h from here on out
-stage2:
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    jmp short start_stage2
-
-sec2_msg: db  "Hello, sector 2!", 0
-
-
-start_stage2:
-    
-    mov ah, 0Eh
-    mov cx, 1
-    mov al, 07h    ; Bell code
-    int 10h
-    
-    mov al, 0xD    ; CR
-    int 10h
-    mov al, 0xA    ; LF
-    int 10h
-    
-    mov si, sec2_msg
-    call print
-    
-
-    
-very_end:
-    jmp very_end
-    
+%include "boot1.asm"
