@@ -1,3 +1,5 @@
+%include "equates.inc"
+
 ; Loaded at 0x7C00
 org 7C00h
 	jmp start
@@ -11,7 +13,7 @@ ReservedSectors:    dw 1       ; number of reserved sectors for boot code
 NumFATs:            db 2       ; number of FATs 
 NumDirEntries:      dw 224     ; number of directory entries in the FAT
 TotalSectors_16:    dw 2880    ; total sectors (if number fits in 16 bits)
-MediaByte:          db 0xF1    ; media description byte
+MediaByte:          db 0xF0    ; media description byte
 NumSectorsPerFAT:   dw 9       ; sectors per FAT
 ;=============================================================================
 ;     Begin DOS 3.0 BPB stuff
@@ -22,34 +24,31 @@ TotalSectors_32:    dd 0              ; total sectors (if its a 32-bit number)
 BootDrive:          db 0              ; drive number (0 for now)
 Unused:             db 0
 BpbVersion:         db 0x29           ; BIOS parameter block version
-VolumeSerial:       dd 0              ; volume serial number
+VolumeSerial:       dd 0xDEADCAFE     ; volume serial number
 VolumeLabel:        db "SYSTEM23   "  ; volume label
 FileSystemType:     db "FAT12   "     ; file system type
 ;=============================================================================
 ;     End BPB
 start:
     cli
-    mov [diskNum], dl ; Save disk number
     xor ax, ax
     mov ss, ax
     mov ds, ax
     mov es, ax
-    mov sp, 7000h     ; Setup a valid stack before starting
+    mov sp, STACK_SEG ; Setup a valid stack before starting
     sti
 
-    mov dh, 20
-    mov dl, 80
-    call cls
+    mov [disk_num], dl ; Save disk number
 
-    
-    mov si, sec1_msg
-    call println
     
     ; Prepare to read disk sectors by setting up ES:BX location
     mov ax, 0
     mov es, ax
-    mov bx, 7E00h
+    mov bx, DISK_BUFFER_SEG
     
+
+
+    ; Start reading in the rest of the system image
 ReadDisk:
     mov ax, 0             ; Reset floppy controller
     mov dl, 0
@@ -57,12 +56,17 @@ ReadDisk:
     nop
 
     mov ah, 2             ; Read sectors function
-    mov al, 1             ; Read 1 sector
-    mov dl, [diskNum]     ; select the disk from earlier
+    mov al, 1             ; Read 5 sectors
+    mov dl, [disk_num]    ; select the disk from earlier
     mov cl, 2             ; sector #2
     mov ch, 0             ; cylinder #0
     mov dh, 0             ; head #0
     int 13h
+
+    mov [disk_status], ah ; save the operation status
+    mov si, msg_read_status
+    call init_print
+    mov ah, [disk_status]
 
     ; Show operation status code via teletype:
     mov bh, '0'
@@ -73,26 +77,29 @@ ReadDisk:
     mov cx, 1
     int 10h
 
-.ReadFailure:
-    jc .ReadFailure
 
-    jmp 0x0000:stage2
+    mov ah, [disk_status]
+    cmp ah, 0
+    je read_success
+read_failure:
+    jmp read_failure
+
+read_success:
+    jmp 0x0000:DISK_BUFFER_SEG
 
 
 
 
+msg_read_status:  db "INT 13 read status: ",0
+disk_num:         db 0
+disk_status:      db 0
 
-sec1_msg: db "Hello, sector 1!", 0
-sec2_msg: db  "Hello, sector 2!", 0
 
-diskNum:  db 0
-
-print:
+init_print:
     push	bx
     push	cx
     push	dx
     push	di
-
     mov ah, 0Eh
     mov cx, 1
 .loop:
@@ -102,75 +109,24 @@ print:
     int 10h
     jmp .loop
 .done:
-
     pop	di
     pop	dx
     pop	cx
     pop	bx
     ret 
 
-println:
+init_println:
     push ax
-    call print
-    mov al, 0xD ; CR
+    call init_print
+    mov al, ASCII_CR
     int 10h
-    mov al, 0xA ; LF
+    mov al, ASCII_LF
     int 10h
     pop ax
     ret
 
-;*****************************************************************************
-; putchar
-;
-;   Input:  al = the character
-;*****************************************************************************
-putchar:
-    push ax
-    mov ah, 0x0E
-    int 10h
-    pop ax
-    ret
 
-;*****************************************************************************
-; cls (clear screen)
-;
-;   Input: dh = number of rows
-;          dl = number of columns
-;*****************************************************************************
-cls:
-    push cx
-    push bx
-    push ax
-
-    mov bh, COLOR_BLACK  ; Set background color
-    shl bh, 4
-    add bh, COLOR_WHITE  ; Set foreground color
-
-    mov al, 0
-    mov ah, 6    ; Scroll function
-
-    dec dh       ; minus 1 since the row/column numbers are 0-based
-    dec dl
- 
-    xor ch, ch   ; upper row number = 0
-    xor cl, cl   ; left column = 0
-    int 10h
-
-    ; move cursor to the top left of the screen
-    xor bh,bh    ; BH = page 0
-    xor dh,dh    ; DH = row 0
-    xor dl,dl    ; DL = col 0
-    mov ah, 2    
-    int 10h
-
-    pop ax
-    pop bx
-    pop cx
-    ret
-
-    
 times  0200h - 2 - ($ - $$)  db 0
     db 055h
     db 0AAh
 
-%include "boot1.asm"
