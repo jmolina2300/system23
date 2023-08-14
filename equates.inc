@@ -2,11 +2,6 @@
 ;    Common equates
 ;*****************************************************************************
 
-FRAME_BUFFER_SEG EQU 0x8000
-
-DISK_BUFFER_SEG  EQU 0x2000
-STACK_SEG        EQU 0x7000
-
 ; Color attributes
 ;  0  0  Black
 ;  1  1  Blue
@@ -25,15 +20,33 @@ STACK_SEG        EQU 0x7000
 ; 14  E  Yellow
 ; 15  F  White
 
-COLOR_BLACK   EQU 0x0
-COLOR_BLUE    EQU 0x1
-COLOR_GREEN   EQU 0x2
-COLOR_CYAN    EQU 0x3
-COLOR_RED     EQU 0x4
-COLOR_WHITE   EQU 0xF
+COLOR_BLACK       EQU 0x0
+COLOR_BLUE        EQU 0x1
+COLOR_GREEN       EQU 0x2
+COLOR_CYAN        EQU 0x3
+COLOR_RED         EQU 0x4
+COLOR_WHITE       EQU 0xF
 COLOR_LIGHT_GREEN EQU 0xA
 COLOR_LIGHT_BLUE  EQU 0x9
 COLOR_LIGHT_RED   EQU 0xC
+
+
+
+
+;*****************************************************************************
+; System organization
+;*****************************************************************************
+DIR_ENTRY_SIZE         EQU 32
+DIR_ENTRIES            EQU 224
+SECTOR_SIZE            EQU 512
+SYS_SIZE_SECTORS       EQU 3
+FAT_SIZE_SECTORS       EQU 9
+
+VGA_MEMORY_SEG   EQU 0xA000
+SYSTEM_SEG       EQU 0x2000
+STACK_SEG        EQU 0x7000
+
+
 
 
 ASCII_CR EQU 0xD
@@ -57,5 +70,5 @@ KEY_TAB       EQU 0x09
 
 
 
-VGA_MODE_GRAPHICS  EQU 12h
+VGA_MODE_GRAPHICS  EQU 13h
 VGA_MODE_TEXT      EQU 03h

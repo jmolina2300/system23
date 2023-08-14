@@ -1,40 +1,114 @@
 %include "equates.inc"
 
 
-ORG DISK_BUFFER_SEG
+org SYSTEM_SEG
 begin:
     mov dh, 20         ; 20 rows
     mov dl, 80         ; 80 columns
     call cls           ; Clear them all...
+
+    mov si, msg_welcome
+    call tty_print
+
     call tty_line_feed
     call tty_line_feed
     mov ah, func_tty
     mov al, 07h        ; Bell code
     int 10h
     
-
-    
     mov si, msg_memory_size
-    call print
+    call tty_print
+
     ; Get lower memory size
     ;   AX will be the number of total kilobytes available
     int 0x12            
     call print_num_base10
     call tty_line_feed
 
+    ; Print the RTC time
+    ;
     mov si, msg_time
-    call print
+    call tty_print
     call put_time
+    call tty_line_feed
+
+    
+forever:
+    call readkey       ; get keystroke
+    call processkey    ; process the keystroke
+    jmp forever
 
 
-;stop: jmp stop
 
-    ;======================================================================
-    ; VGA graphics stuff
-    ; 
-    ; Set VGA mode to 'graphics' 
-    ; mov al, 13h  ; CGA (320x200)
-    mov al, 12h  ; VGA,ATI VIP (640x480)
+vga_index:    dw 0x0000  ; Goes from 0 to 63999
+pixel:        db COLOR_BLUE
+pixel_loc:    db 0x0
+
+pixel_x:      dw 0
+pixel_y:      dw 0
+
+
+;*****************************************************************************
+; Put a pixel in VGA memory
+;
+; AX = Y-coordinate
+; BX = X-coordinate
+;*****************************************************************************
+put_pix:
+    pusha
+    mov dx, 320
+    mul dx       ; DX:AX = (Y * 319)
+
+    ; Then add this to the X-coordinate provided, 
+    ;  but it could be too large for AX in weird cases
+    add ax, bx
+
+
+    ; Now DX:AX = (Y * 319) + X
+    ; Save DX:AX in the vga_index variable
+    mov [vga_index], ax
+    
+
+    mov bl, COLOR_LIGHT_GREEN
+    ; Then place pixel at this coordinate in VGA memory
+    mov es:[vga_index], bl
+
+    popa
+    ret
+
+
+;*****************************************************************************
+; VGA Clear - clears the vga buffer with a specified color
+;
+; AL = pixel color
+;
+;*****************************************************************************
+vga_clear:
+    pusha
+    push es
+
+    xor bx,bx
+    ; Load ES with the VGA memory segment
+    mov ax, VGA_MEMORY_SEG
+    mov es, ax
+    xor ax, ax
+    mov al, [pixel]    ; AL = pixel color
+.clear_loop:
+    mov [es:bx], al    ; vgamem[bx] = pixel
+    inc bx
+    cmp bx, 64000
+    jne .clear_loop
+    pop es
+    popa
+    ret
+
+
+;*****************************************************************************
+; VGA Test
+;
+;*****************************************************************************
+VGA_TEST:
+    mov al, 13h
     mov ah, 0
     int 10h
 
@@ -82,16 +156,10 @@ draw_loop2:
     cmp si, 0
     jne draw_loop2
 
+    ret
 
 
 
-
-
-    
-forever:
-    call readkey       ; get keystroke
-    call processkey    ; process the keystroke
-    jmp forever
 
 
 
@@ -99,7 +167,7 @@ forever:
 ; Print a 0-terminated string
 ;
 ;*****************************************************************************
-print:
+tty_print:
     push    ax
     push	bx
     push	cx
@@ -131,8 +199,8 @@ print:
 ;
 ;
 ;*****************************************************************************
-println:
-    call print
+tty_println:
+    call tty_print
     mov al, ASCII_CR
     int 10h
     mov al, ASCII_LF
@@ -292,7 +360,7 @@ toggle_graphics:
     mov al, VGA_MODE_TEXT
     jmp .done
 
-.done
+.done:
     mov [vga_mode], al
     mov ah, 0
     int 10h
@@ -352,3 +420,6 @@ msg_time:         db "RTC Time: ", 0
 msg_memory_size:  db "Lower memory available (KiB): ", 0
 msg_sec1:         db "Hello, sector 1!", 0
 msg_sec2:         db "Hello, sector 2!", 0
+msg_welcome:      db "Welcome to System23!", 0
+
+times (SYS_SIZE_SECTORS * SECTOR_SIZE) - ($ - $$) db 0

@@ -3,15 +3,18 @@
 #
 #-
 
-disk: boot boot1
-	cat boot.img boot1.img > disk.img
+disk: boot boot1 fat1-2
+	cat boot.bin boot1.bin fat1-2.bin > disk.img
 	truncate -s 1474560 disk.img
 
 boot: boot.asm
-	nasm -o boot.img boot.asm
+	nasm -o boot.bin boot.asm
 
 boot1: boot1.asm
-	nasm -o boot1.img boot1.asm
+	nasm -o boot1.bin boot1.asm
+
+fat1-2: fat1-2.asm
+	nasm -o fat1-2.bin fat1-2.asm
 
 
 

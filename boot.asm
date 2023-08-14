@@ -2,16 +2,16 @@
 
 ; Loaded at 0x7C00
 org 7C00h
-	jmp start
+    jmp start
     nop
 ;=============================================================================
 ;     Begin DOS 2.0 BPB 
 db 0,0,0,0,0,0,0,0
 BytesPerSector:     dw 512     ; sector size in bytes
 SectorsPerCluster:  db 1       ; sectors per cluster
-ReservedSectors:    dw 1       ; number of reserved sectors for boot code
+ReservedSectors:    dw 1+SYS_SIZE_SECTORS  ; number of reserved sectors
 NumFATs:            db 2       ; number of FATs 
-NumDirEntries:      dw 224     ; number of directory entries in the FAT
+NumDirEntries:      dw 224     ; number of entries in root directory
 TotalSectors_16:    dw 2880    ; total sectors (if number fits in 16 bits)
 MediaByte:          db 0xF0    ; media description byte
 NumSectorsPerFAT:   dw 9       ; sectors per FAT
@@ -44,7 +44,7 @@ start:
     ; Prepare to read disk sectors by setting up ES:BX location
     mov ax, 0
     mov es, ax
-    mov bx, DISK_BUFFER_SEG
+    mov bx, SYSTEM_SEG
     
 
 
@@ -56,7 +56,7 @@ ReadDisk:
     nop
 
     mov ah, 2             ; Read sectors function
-    mov al, 1             ; Read 5 sectors
+    mov al, SYS_SIZE_SECTORS
     mov dl, [disk_num]    ; select the disk from earlier
     mov cl, 2             ; sector #2
     mov ch, 0             ; cylinder #0
@@ -85,7 +85,7 @@ read_failure:
     jmp read_failure
 
 read_success:
-    jmp 0x0000:DISK_BUFFER_SEG
+    jmp 0x0000:SYSTEM_SEG
 
 
 
