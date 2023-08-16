@@ -45,7 +45,16 @@ FAT_SIZE_SECTORS       EQU 9
 VGA_MEMORY_SEG   EQU 0xA000
 SYSTEM_SEG       EQU 0x2000
 STACK_SEG        EQU 0x7000
+DISK_BUFF_SEG    EQU 0x9000
 
+
+; Known location where to save the boot drive so it can be used in stage 2
+boot_drive       EQU 0x7DEA
+
+
+; Disk error codes
+DISK_OK          EQU 0
+DISK_TIMEOUT     EQU 0x80
 
 
 
@@ -66,8 +75,11 @@ func_writechar EQU 0x09
 ; BIOS scan codes for keyboard
 KEY_RETURN    EQU 0x1C0D
 KEY_BACKSPACE EQU 0x0E08
-KEY_TAB       EQU 0x09
+KEY_TAB       EQU 0x0F09
+KEY_INS       EQU 0x5200
+KEY_ESC       EQU 0x011B
 
+KEY_BUFFER_SIZE    EQU 20
 
 
 VGA_MODE_GRAPHICS  EQU 13h

@@ -39,7 +39,6 @@ start:
     sti
 
     mov [disk_num], dl ; Save disk number
-
     
     ; Prepare to read disk sectors by setting up ES:BX location
     mov ax, 0
@@ -90,9 +89,7 @@ read_success:
 
 
 
-msg_read_status:  db "INT 13 read status: ",0
-disk_num:         db 0
-disk_status:      db 0
+msg_read_status:  db "INT 13 read status: ", 0
 
 
 init_print:
@@ -130,3 +127,7 @@ times  0200h - 2 - ($ - $$)  db 0
     db 055h
     db 0AAh
 
+
+ABSOLUTE boot_drive
+    disk_num:    resb 1
+    disk_status: resb 1

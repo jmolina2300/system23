@@ -54,7 +54,7 @@ DIR_FstClusHi:     dw 0x0000
 DIR_WrtTime:       dw 0x9912
 DIR_WrtDate:       dw 0x570D
 DIR_FstClusLo:     dw 0x0002
-DIR_FileSize:      dd 14
+DIR_FileSize:      dd 20
 ;
 ; Fill the remaining directory entries with 0
 ;
