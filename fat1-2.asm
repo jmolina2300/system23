@@ -13,16 +13,14 @@
 ;   0. boot         1 sectors
 ;   1. system       3 sectors*
 ;   2. FAT #1       9 sectors
-;   3. Root Dir    14 sectors
-;   4. Data         1 sectors*
 ;
 ;   (*) Not sure how many yet
 ;  
 ;
 ; This would result in the following memory map:
-; +-----+---------+------+---------------+--------------------+--------+
-; |boot |system   |FAT1  |RootDir        |Data                |        |
-; +-----+---------+------+---------------+--------------------+--------+
+; +-----+---------+------+---------------------------------------------+
+; |boot |system   |FAT1  |                                             |
+; +-----+---------+------+---------------------------------------------+
 ;
 ;
 ;*****************************************************************************
@@ -54,7 +52,7 @@ DIR_FstClusHi:     dw 0x0000
 DIR_WrtTime:       dw 0x9912
 DIR_WrtDate:       dw 0x570D
 DIR_FstClusLo:     dw 0x0002
-DIR_FileSize:      dd 20
+DIR_FileSize:      dd KEY_BUFFER_SIZE
 ;
 ; Fill the remaining directory entries with 0
 ;
@@ -64,7 +62,7 @@ times (DIR_ENTRIES - 1) * DIR_ENTRY_SIZE db 0
 ;++
 ; Data Region with the file data
 ;--
-data:  db "Hello, World!", 0xA
+data:  db "Hello, World!    :D",0xA
 
 
 

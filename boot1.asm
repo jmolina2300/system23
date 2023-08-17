@@ -13,7 +13,7 @@ begin:
     call tty_line_feed
     call tty_line_feed
     mov ah, func_tty
-    mov al, 07h        ; Bell code
+    mov al, ASCII_BELL
     int 10h
     
     mov si, msg_memory_size
@@ -33,7 +33,8 @@ begin:
     call tty_line_feed
 
 
-
+    ; Print drive parameters
+    ;
     mov ax, [boot_drive]
     call put_drive_params
 
@@ -198,6 +199,7 @@ vga_clear:
 ;
 ;*****************************************************************************
 VGA_TEST:
+    pusha
     mov al, 13h
     mov ah, 0
     int 10h
@@ -246,6 +248,13 @@ draw_loop2:
     cmp si, 0
     jne draw_loop2
 
+    xor ax,ax
+    int 16h
+
+    mov al, VGA_MODE_TEXT
+    mov ah, 0
+    int 10h
+    popa
     ret
 
 
@@ -291,6 +300,7 @@ tty_print:
 ;*****************************************************************************
 tty_println:
     call tty_print
+    mov ah, func_tty
     mov al, ASCII_CR
     int 10h
     mov al, ASCII_LF
@@ -387,6 +397,70 @@ put_pixel:
 
 
 ;*****************************************************************************
+; Do command, if there is one
+;
+;*****************************************************************************
+processKeyBuffer:
+    pusha
+    push ds
+
+    mov si, kbd_buffer
+    lodsb
+
+.isItCommand:
+    cmp  al, ':'
+    jne  .done    ; Nope, not a command
+    
+    lodsb         ; Maybe a command -- look at the next byte
+    ; Write command
+.command1:
+    cmp  al, 'w'
+    jne  .command2
+    jmp  .doWrite
+
+
+    ; Bell command
+.command2:
+    cmp  al, 'b'
+    jne  .command3
+    jmp  .doBell
+
+    ; VGA test
+.command3:
+    cmp   al, 'v'
+    jne  .badCommand
+    jmp  .doVGA
+
+
+.doWrite:
+    call  write_to_disk_buffer
+    call  write_disk_buffer_to_disk
+    mov   si, msg_drive_write
+    call  tty_println
+    jmp   .done
+
+.doBell:
+    mov   al, ASCII_BELL
+    call  putchar
+    jmp   .done
+
+.doVGA:
+    call VGA_TEST
+    jmp .done
+
+.badCommand:
+    xor   ax,ax
+    mov   ds, ax      ; DS=0 (future: bad assumption)
+    mov   si, msg_err
+    call  tty_println
+
+.done:
+    pop ds
+    popa
+    ret
+
+
+;*****************************************************************************
 ; Read key input
 ;
 ;*****************************************************************************
@@ -406,58 +480,73 @@ processkey:
     push   di
     push   cx
 
-    ; did they hit enter?
-    cmp ax, KEY_RETURN
-    jne .k2
-    call tty_line_feed
+    ;------------------------------
+    ; ENTER/RETURN
+    ;------------------------------
+    cmp   ax, KEY_RETURN
+    jne   .k2
+    call  tty_line_feed      ; Advance the line
+    call  processKeyBuffer   ; Check the key buffer for commands
+    call  keybuffer_empty    ; Empty the key buffer
 
-    jmp .done
+    jmp   .done
 
+    ;------------------------------
+    ; TAB
+    ;------------------------------
 .k2:
-    cmp ax, KEY_TAB
-    jne .k3
-    call toggle_graphics
-    jmp .done
+    cmp   ax, KEY_TAB
+    jne   .k3
+    call  toggle_graphics
+    jmp   .done
 
+
+    ;------------------------------
+    ; Backspace
+    ;------------------------------
 .k3:
-    cmp ax, KEY_BACKSPACE
-    jne .k4
+    cmp   ax, KEY_BACKSPACE
+    jne   .k4
 
-    xor bx,bx     ; Get cursor position...
-    mov ah, 3
-    int 10h
+    xor   bx,bx     ; Get cursor position...
+    mov   ah, 3
+    int   10h
 
-    dec dl        ; Move back 1 space...
-    mov ah, 2
-    int 10h
+    cmp    dl,CLI_LIMIT_LEFT
+    je    .done
+    dec   dl        ; Move back 1 space...
+    mov   ah, 2
+    int   10h
 
-    mov cx, 1     ; And put a null character
-    mov al, 0
-    mov ah, 0xA
-    int 10h
-
+    mov   cx, 1     ; And put a null character
+    mov   al, 0
+    mov   ah, 0xA
+    int   10h
     call  keybuffer_remove
+    jmp   .done
 
-    jmp .done
 
-
+    ;------------------------------
+    ; INSERT
+    ;------------------------------
 .k4:
-    cmp ax, KEY_INS
-    jne .k5
-    call write_to_disk_buffer
-    call write_disk_buffer_to_disk
-    call keybuffer_empty
+    cmp   ax, KEY_INS
+    jne   .k5
+    ;call  write_to_disk_buffer
+    ;call  write_disk_buffer_to_disk
+    jmp   .done
 
-    jmp .done
-
+    ;------------------------------
+    ; Any other key was pressed
+    ;------------------------------
 .k5:
-    xor bx, bx
-    mov bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
-    cmp bl, KEY_BUFFER_SIZE
-    je  .done                 ; kbd_buffer_idx == kbd_buffer_size?
+    xor   bx, bx
+    mov   bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
+    cmp   bl, KEY_BUFFER_SIZE
+    je    .done                 ; kbd_buffer_idx == kbd_buffer_size?
 
-    call keybuffer_insert     ; save the character
-    call putchar              ; print the character
+    call   keybuffer_insert     ; save the character
+    call   putchar              ; print the character
 
 .done:
     pop   cx
@@ -470,6 +559,9 @@ processkey:
 
 keybuffer_empty:
     push ax
+    push cx
+    push si
+    push di
 
     mov byte [kbd_buffer_idx], 0   ; Reset keyboard buffer index
     mov cx, KEY_BUFFER_SIZE
@@ -478,44 +570,48 @@ keybuffer_empty:
 
     rep movsb
 
+    pop di
+    pop si
+    pop cx
     pop ax
     ret
 
 
 keybuffer_remove:
-    push bx
-    push ax
+    push   bx
+    push   ax
 
     ; Decrement the current buffer index by 1
-    xor bx,bx
-    mov  bl, [kbd_buffer_idx]
-    dec  bl 
-    mov [kbd_buffer_idx], bl
+    xor    bx,bx
+    mov    bl, [kbd_buffer_idx]
+    dec    bl 
+    mov   [kbd_buffer_idx], bl
 
     ; Replace the character at this position with null
-    mov al, 0
-    lea  si, [kbd_buffer + bx]
-    mov [si], al
+    mov    al, 0
+    lea    si, [kbd_buffer + bx]
+    mov   [si], al
 
-    pop ax
-    pop bx
+    pop    ax
+    pop    bx
     ret
 
 ; AL = character to insert
 keybuffer_insert:
-    push di
-    push bx
+    push   di
+    push   bx
 
-    mov  bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
-    lea  di, kbd_buffer
-    add  di, bx               ; kbd_buffer_idx++
-    mov  [di], al             ; kbd_buffer[di] = key
-    inc  bl                   ; kbd_buffer_idx +=1 
-    mov [kbd_buffer_idx], bl
+    mov    bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
+    lea    di, kbd_buffer
+    add    di, bx
+    mov   [di], al               ; Store the key pressed
+    inc    bl                    ; kbd_buffer_idx +=1 
+    mov   [kbd_buffer_idx], bl
 
-    pop bx
-    pop di
+    pop    bx
+    pop    di
     ret
+
 
 
 
@@ -605,21 +701,28 @@ print_num_base10:
 ;
 ;*****************************************************************************
 write_to_disk_buffer:
-    pusha
-    push es
-    push ds
-    xor ax,ax
-    mov es,ax
-    mov ds,ax
-    mov di, DISK_BUFF_SEG
-    mov cx, KEY_BUFFER_SIZE  ; repeat 20 times (kbd buffer size)
-    lea si, kbd_buffer
+    push  ax
+    push  cx
+    push  di
+    push  si
+    push  es
+    push  ds
 
-    rep  movsb 
+    xor  ax, ax             ; Set ES=DS=0 (future: not a safe assumption)
+    mov  es, ax
+    mov  ds, ax
+    mov  di, DISK_BUFF_SEG
+    mov  cx, KEY_BUFFER_SIZE
+    lea  si, kbd_buffer
 
-    pop ds
-    pop es
-    popa
+    rep  movsb              ; copy byte from ds:[si] to es:[di] until cx=0
+
+    pop  ds
+    pop  es
+    pop  si
+    pop  di
+    pop  cx
+    pop  ax
     ret
 
 ;*****************************************************************************
@@ -784,6 +887,7 @@ lba_to_chs:
 empty_buffer:   times KEY_BUFFER_SIZE  db 0
 kbd_buffer:     times KEY_BUFFER_SIZE  db 0
 kbd_buffer_idx:                        db 0
+kbd_enter:                             db 0
 
 
 drvSecsPerTrack:     db 0
@@ -806,6 +910,8 @@ msg_drive_params_1:  db "    Cylinders = ",0
 msg_drive_params_2:  db "        Sides = ",0
 msg_drive_params_3:  db " SecsPerTrack = ",0
 msg_err:             db "An error has occurred: ",0
+
+msg_drive_write:     db "Writing to disk...", 0
 
 
 msg_sec1:         db "Hello, sector 1!", 0

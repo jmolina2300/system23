@@ -57,13 +57,13 @@ DISK_OK          EQU 0
 DISK_TIMEOUT     EQU 0x80
 
 
+ASCII_BELL       EQU 0x7
+ASCII_CR         EQU 0xD
+ASCII_LF         EQU 0xA
 
-ASCII_CR EQU 0xD
-ASCII_LF EQU 0xA
-
-bios_disk EQU 0x13
-bios_video EQU 0x10
-bios_keyboard EQU 0x16
+bios_disk        EQU 0x13
+bios_video       EQU 0x10
+bios_keyboard    EQU 0x16
 
 
 func_tty       EQU 0x0E
@@ -84,3 +84,8 @@ KEY_BUFFER_SIZE    EQU 20
 
 VGA_MODE_GRAPHICS  EQU 13h
 VGA_MODE_TEXT      EQU 03h
+
+
+
+CLI_LIMIT_LEFT     EQU 0
+CLI_LIMIT_RIGHT    EQU 80
