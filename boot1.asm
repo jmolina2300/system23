@@ -29,8 +29,11 @@ begin:
     ;
     mov si, MsgTime
     call Print
-    call PutTime
+    call GetCurrentTime
+    mov si, TimeString
+    call Println
     call PutCrLf
+    
 
 
     ; Print drive parameters
@@ -322,23 +325,60 @@ Cls:
     ret
 
 
+;*****************************************************************************
+; BCD to Decimal
+;
+; Input:  BCD byte in AL
+;
+; Output: AH = 10s place digit
+;         AL = 1s place digit
+;
+;*****************************************************************************
+BcdToDec:
+    mov  ah, al
+    and  al, 0x0F   ; Keep lower nibble in AL
+    shr  ah, 4      ; Keep top nibble in AH
+    ret
 
-PutTime:
+
+;*****************************************************************************
+; Get Current RTC time string
+;
+; Input:   None
+;
+; Output:  Time stored in TimeString
+;
+;*****************************************************************************
+GetCurrentTime:
     pusha
-    mov ah, 02h
-    int 1Ah      ; BIOS read RTC function
-    mov al, ch
-    and ax, 0xff
-    call PrintNumBase10
-    mov al, ':'
-    call Putc
-    mov al, cl
-    call PrintNumBase10
-    mov al, ':'
-    call Putc
-    mov al, dh 
-    call PrintNumBase10
-    call PutCrLf
+    mov  ah, 02h
+    int  1Ah            ; BIOS read RTC function
+    jc  .error
+
+    mov  al, ch         ; AL = Hours
+    call BcdToDec
+    add  al, '0'
+    add  ah, '0'
+    lea  si, TimeString
+    mov [si + 0], ah
+    mov [si + 1], al
+                        ; Skip [si+2], the : character
+
+    mov  al, cl         ; AL = Minutes
+    call BcdToDec
+    add  al, '0'
+    add  ah, '0'
+    mov [si + 3], ah
+    mov [si + 4], al
+                        ; Skip [si+5], the : character
+
+    mov  al, dh         ; AL = seconds
+    call BcdToDec
+    add  al, '0'
+    add  ah, '0'
+    mov [si + 6], ah
+    mov [si + 7], al
+.error:
     popa
     ret
 
@@ -884,5 +924,6 @@ MsgError:            db "An error has occurred: ",0
 MsgDriveWrite:       db "Writing to disk...", 0
 MsgWelcome:          db "Welcome to System23!", 0
 
+TimeString:          db "  :  :  ",0
 
 times (SYS_SIZE_SECTORS * SECTOR_SIZE) - ($ - $$) db 0
