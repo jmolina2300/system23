@@ -6,7 +6,7 @@ org 7C00h
     nop
 ;=============================================================================
 ;     Begin DOS 2.0 BPB 
-db 0,0,0,0,0,0,0,0
+db 'L','A','B','E','L',0,0,0
 BytesPerSector:     dw 512     ; sector size in bytes
 SectorsPerCluster:  db 1       ; sectors per cluster
 ReservedSectors:    dw 1+SYS_SIZE_SECTORS  ; number of reserved sectors

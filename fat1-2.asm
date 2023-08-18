@@ -36,23 +36,55 @@ db 0xF0,0xFF,0xFF,0x00,0xF0,0xFF,0,0,0,0,0,0,0,0,0,0
 times ((FAT_SIZE_SECTORS * SECTOR_SIZE) - 16)  db 0x00
 
 
-;++
-; Root Directory with one 32-byte entry
-;
-; This entry describes the one and only file on disk
-;--
-DIR_Name:          db "MAINFILETXT"
-DIR_Atrr:          db 0x21
-DIR_NTRes:         db 0x00
-DIR_CrtTimeTenth:  db 0x00
-DIR_CrtTime:       dw 0x9912
-DIR_CrtDate:       dw 0x570D
-DIR_LstAccDate:    dw 0x570D
-DIR_FstClusHi:     dw 0x0000
-DIR_WrtTime:       dw 0x9912
-DIR_WrtDate:       dw 0x570D
-DIR_FstClusLo:     dw 0x0002
-DIR_FileSize:      dd KEY_BUFFER_SIZE
+
+struc   mystruct
+DIR_Name:          resb 11
+DIR_Atrr:          resb 1
+DIR_NTRes:         resb 1
+DIR_CrtTimeTenth:  resb 1
+DIR_CrtTime:       resw 1
+DIR_CrtDate:       resw 1
+DIR_LstAccDate:    resw 1
+DIR_FstClusHi:     resw 1
+DIR_WrtTime:       resw 1
+DIR_WrtDate:       resw 1
+DIR_FstClusLo:     resw 1
+DIR_FileSize:      resd 1
+endstruc
+
+
+VolumeID:
+    istruc mystruct
+        at DIR_Name,          db "VolumeID   "
+        at DIR_Atrr,          db 0x28
+        at DIR_NTRes,         db 0x00
+        at DIR_CrtTimeTenth,  db 0x00
+        at DIR_CrtTime,       dw 0x9912
+        at DIR_CrtDate,       dw 0x570D
+        at DIR_LstAccDate,    dw 0x570D
+        at DIR_FstClusHi,     dw 0xFFFF
+        at DIR_WrtTime,       dw 0xFFFF
+        at DIR_WrtDate,       dw 0xFFFF
+        at DIR_FstClusLo,     dw 0x0000
+        at DIR_FileSize,      dd 0xFFFFFFFF
+    iend
+
+MainFile:
+    istruc mystruct
+        at DIR_Name,          db "MAINFILETXT"
+        at DIR_Atrr,          db 0x21
+        at DIR_NTRes,         db 0x00
+        at DIR_CrtTimeTenth,  db 0x00
+        at DIR_CrtTime,       dw 0x9912
+        at DIR_CrtDate,       dw 0x570D
+        at DIR_LstAccDate,    dw 0x570D
+        at DIR_FstClusHi,     dw 0x0000
+        at DIR_WrtTime,       dw 0x9912
+        at DIR_WrtDate,       dw 0x570D
+        at DIR_FstClusLo,     dw 0x0002
+        at DIR_FileSize,      dd KEY_BUFFER_SIZE
+    iend
+
 ;
 ; Fill the remaining directory entries with 0
 ;

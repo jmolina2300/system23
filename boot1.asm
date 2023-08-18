@@ -5,55 +5,48 @@ org SYSTEM_SEG
 begin:
     mov dh, 20         ; 20 rows
     mov dl, 80         ; 80 columns
-    call cls           ; Clear them all...
+    call Cls           ; Clear them all...
 
-    mov si, msg_welcome
-    call tty_print
-
-    call tty_line_feed
-    call tty_line_feed
+    mov si, MsgWelcome
+    call Print
+ 
+    call PutCrLf
+    call PutCrLf
     mov ah, func_tty
     mov al, ASCII_BELL
     int 10h
     
-    mov si, msg_memory_size
-    call tty_print
+    mov si, MsgMemorySize
+    call Print
 
     ; Get lower memory size
     ;   AX will be the number of total kilobytes available
     int 0x12            
-    call print_num_base10
-    call tty_line_feed
+    call PrintNumBase10
+    call PutCrLf
 
     ; Print the RTC time
     ;
-    mov si, msg_time
-    call tty_print
-    call put_time
-    call tty_line_feed
+    mov si, MsgTime
+    call Print
+    call PutTime
+    call PutCrLf
 
 
     ; Print drive parameters
     ;
-    mov ax, [boot_drive]
-    call put_drive_params
+    mov  ax, [boot_drive]
+    call PutDriveParams
 
 
 
     
 forever:
-    call readkey       ; get keystroke
-    call processkey    ; process the keystroke
-    jmp forever
+    call ReadKey       ; get keystroke
+    call ProcessKey    ; process the keystroke
+    jmp  forever
 
 
-
-vga_index:    dw 0x0000  ; Goes from 0 to 63999
-pixel:        db COLOR_BLUE
-pixel_loc:    db 0x0
-
-pixel_x:      dw 0
-pixel_y:      dw 0
 
 
 
@@ -71,12 +64,12 @@ pixel_y:      dw 0
 ;  drvHeads
 ;
 ;*****************************************************************************
-put_drive_params:
+PutDriveParams:
     push ax
-    mov si, msg_drive_params
-    call tty_print
-    call print_num_base10
-    call tty_line_feed
+    mov si, MsgDriveParams
+    call Print
+    call PrintNumBase10
+    call PutCrLf
 
     ;---
     ; BIOS function 13/8 - Get drive parameters
@@ -112,60 +105,33 @@ put_drive_params:
     add ax, cx                 ; AX = CH + ((CL & 0xC0) << 2)
     inc ax
     mov [drvCylinders], ax
-    mov si, msg_drive_params_1 ; 1 Number of cylinders
-    call tty_print
-    call print_num_base10
-    call tty_line_feed
+    mov si, MsgDriveParams1    ; 1 Number of cylinders
+    call Print
+    call PrintNumBase10
+    call PutCrLf
 
-    mov si, msg_drive_params_2 ; 2 Number of sides/heads (0-based)
-    call tty_print
+    mov si, MsgDriveParams2    ; 2 Number of sides/heads (0-based)
+    call Print
     pop ax                     ; restore DH=sides
     shr ax, 8
     inc ax
     mov [drvHeads], ax
-    call print_num_base10
-    call tty_line_feed
+    call PrintNumBase10
+    call PutCrLf
 
-    mov si, msg_drive_params_3 ; 3 Sectors per track
-    call tty_print
+    mov si, MsgDriveParams3    ; 3 Sectors per track
+    call Print
     pop ax                     ; restore CL=SecsPerTrack
     and ax, 0xff
     mov [drvSecsPerTrack], ax
-    call print_num_base10
-    call tty_line_feed
+    call PrintNumBase10
+    call PutCrLf
 
 .error:
-    call tty_line_feed
+    call PutCrLf
     ret
 
 
-;*****************************************************************************
-; Put a pixel in VGA memory
-;
-; AX = Y-coordinate
-; BX = X-coordinate
-;*****************************************************************************
-put_pix:
-    pusha
-    mov dx, 320
-    mul dx       ; DX:AX = (Y * 319)
-
-    ; Then add this to the X-coordinate provided, 
-    ;  but it could be too large for AX in weird cases
-    add ax, bx
-
-
-    ; Now DX:AX = (Y * 319) + X
-    ; Save DX:AX in the vga_index variable
-    mov [vga_index], ax
-    
-
-    mov bl, COLOR_LIGHT_GREEN
-    ; Then place pixel at this coordinate in VGA memory
-    mov es:[vga_index], bl
-
-    popa
-    ret
 
 
 ;*****************************************************************************
@@ -174,7 +140,7 @@ put_pix:
 ; AL = pixel color
 ;
 ;*****************************************************************************
-vga_clear:
+VgaClear:
     pusha
     push es
 
@@ -183,9 +149,9 @@ vga_clear:
     mov ax, VGA_MEMORY_SEG
     mov es, ax
     xor ax, ax
-    mov al, [pixel]    ; AL = pixel color
+    mov al, [PixelColor]    ; AL = pixel color
 .clear_loop:
-    mov [es:bx], al    ; vgamem[bx] = pixel
+    mov [es:bx], al         ; vgamem[bx] = pixel
     inc bx
     cmp bx, 64000
     jne .clear_loop
@@ -198,7 +164,7 @@ vga_clear:
 ; VGA Test
 ;
 ;*****************************************************************************
-VGA_TEST:
+VgaTest:
     pusha
     mov al, 13h
     mov ah, 0
@@ -220,7 +186,7 @@ VGA_TEST:
 draw_loop:
     mov cx, si     ; CX = cols
     mov dx, di     ; DX = rows
-    call put_pixel
+    call PutPixel
 
 
     inc si
@@ -236,7 +202,7 @@ draw_loop:
 draw_loop2:
     mov cx, si     ; CX = cols
     mov dx, di     ; DX = rows
-    call put_pixel
+    call PutPixel
 
     dec si
     mov bl, byte [si]     ; BL = SI
@@ -266,7 +232,7 @@ draw_loop2:
 ; Print a 0-terminated string
 ;
 ;*****************************************************************************
-tty_print:
+Print:
     push    ax
     push	bx
     push	cx
@@ -278,7 +244,7 @@ tty_print:
     mov cx, 1
 .loop:
     lodsb          ; AL = DS:SI
-    cmp al, 0      ; AL == 0?
+    and al, al     ; AL == 0?
     jz .done
     int 10h
     jmp .loop
@@ -298,21 +264,23 @@ tty_print:
 ;
 ;
 ;*****************************************************************************
-tty_println:
-    call tty_print
+Println:
+    call Print
+    push ax
     mov ah, func_tty
     mov al, ASCII_CR
     int 10h
     mov al, ASCII_LF
     int 10h
+    pop ax
     ret
 
 ;*****************************************************************************
-; putchar
+; Putc
 ;
 ;   Input:  al = the character
 ;*****************************************************************************
-putchar:
+Putc:
     push ax
     mov ah, 0x0E
     int 10h
@@ -320,12 +288,12 @@ putchar:
     ret
 
 ;*****************************************************************************
-; cls (clear screen)
+; Cls (clear screen)
 ;
 ;   Input: dh = number of rows
 ;          dl = number of columns
 ;*****************************************************************************
-cls:
+Cls:
     push cx
     push bx
     push ax
@@ -355,22 +323,22 @@ cls:
 
 
 
-put_time:
+PutTime:
     pusha
     mov ah, 02h
     int 1Ah      ; BIOS read RTC function
     mov al, ch
     and ax, 0xff
-    call print_num_base10
+    call PrintNumBase10
     mov al, ':'
-    call putchar
+    call Putc
     mov al, cl
-    call print_num_base10
+    call PrintNumBase10
     mov al, ':'
-    call putchar
+    call Putc
     mov al, dh 
-    call print_num_base10
-    call tty_line_feed
+    call PrintNumBase10
+    call PutCrLf
     popa
     ret
 
@@ -385,7 +353,7 @@ put_time:
 ; CX = column
 ; DX = row
 ;*****************************************************************************
-put_pixel:
+PutPixel:
     push ax
     push bx
     mov bx, 0      ; page = 0
@@ -400,7 +368,7 @@ put_pixel:
 ; Do command, if there is one
 ;
 ;*****************************************************************************
-processKeyBuffer:
+ProcessKeyBuffer:
     pusha
     push ds
 
@@ -433,26 +401,26 @@ processKeyBuffer:
 
 
 .doWrite:
-    call  write_to_disk_buffer
-    call  write_disk_buffer_to_disk
-    mov   si, msg_drive_write
-    call  tty_println
+    call  FillDiskBuffer
+    call  WriteToDisk
+    mov   si, MsgDriveWrite
+    call  Println
     jmp   .done
 
 .doBell:
     mov   al, ASCII_BELL
-    call  putchar
+    call  Putc
     jmp   .done
 
 .doVGA:
-    call VGA_TEST
+    call VgaTest
     jmp .done
 
 .badCommand:
     xor   ax,ax
     mov   ds, ax      ; DS=0 (future: bad assumption)
-    mov   si, msg_err
-    call  tty_println
+    mov   si, MsgError
+    call  Println
 
 .done:
     pop ds
@@ -464,7 +432,7 @@ processKeyBuffer:
 ; Read key input
 ;
 ;*****************************************************************************
-readkey:
+ReadKey:
     mov ah, 0
     int 16h        
     ret
@@ -474,7 +442,7 @@ readkey:
 ; Process key input
 ;
 ;*****************************************************************************
-processkey:
+ProcessKey:
     push   ax
     push   bx
     push   di
@@ -485,9 +453,9 @@ processkey:
     ;------------------------------
     cmp   ax, KEY_RETURN
     jne   .k2
-    call  tty_line_feed      ; Advance the line
-    call  processKeyBuffer   ; Check the key buffer for commands
-    call  keybuffer_empty    ; Empty the key buffer
+    call  PutCrLf      ; Advance the line
+    call  ProcessKeyBuffer   ; Check the key buffer for commands
+    call  KeyBufferEmpty     ; Empty the key buffer
 
     jmp   .done
 
@@ -497,7 +465,7 @@ processkey:
 .k2:
     cmp   ax, KEY_TAB
     jne   .k3
-    call  toggle_graphics
+    call  ToggleGraphics
     jmp   .done
 
 
@@ -522,7 +490,7 @@ processkey:
     mov   al, 0
     mov   ah, 0xA
     int   10h
-    call  keybuffer_remove
+    call  KeyBufferRemove
     jmp   .done
 
 
@@ -532,8 +500,8 @@ processkey:
 .k4:
     cmp   ax, KEY_INS
     jne   .k5
-    ;call  write_to_disk_buffer
-    ;call  write_disk_buffer_to_disk
+    ;call  FillDiskBuffer
+    ;call  WriteToDisk
     jmp   .done
 
     ;------------------------------
@@ -545,8 +513,8 @@ processkey:
     cmp   bl, KEY_BUFFER_SIZE
     je    .done                 ; kbd_buffer_idx == kbd_buffer_size?
 
-    call   keybuffer_insert     ; save the character
-    call   putchar              ; print the character
+    call   KeyBufferInsert     ; save the character
+    call   Putc                ; print the character
 
 .done:
     pop   cx
@@ -557,7 +525,7 @@ processkey:
 
 
 
-keybuffer_empty:
+KeyBufferEmpty:
     push ax
     push cx
     push si
@@ -577,7 +545,7 @@ keybuffer_empty:
     ret
 
 
-keybuffer_remove:
+KeyBufferRemove:
     push   bx
     push   ax
 
@@ -597,7 +565,7 @@ keybuffer_remove:
     ret
 
 ; AL = character to insert
-keybuffer_insert:
+KeyBufferInsert:
     push   di
     push   bx
 
@@ -615,7 +583,7 @@ keybuffer_insert:
 
 
 
-tty_line_feed:
+PutCrLf:
     push ax
     mov al, ASCII_CR
     mov ah, func_tty
@@ -631,23 +599,23 @@ tty_line_feed:
 ; Toggle between graphics or text mode
 ;
 ;*****************************************************************************
-toggle_graphics:
+ToggleGraphics:
     push ax
-    mov al, [vga_mode]
-    cmp al, VGA_MODE_GRAPHICS
-    je .to_text_mode
+    mov  al, [VgaMode]
+    cmp  al, VGA_MODE_GRAPHICS
+    je  .to_text_mode
 .to_graphics_mode:
-    mov al, VGA_MODE_GRAPHICS
-    jmp .done
+    mov  al, VGA_MODE_GRAPHICS
+    jmp  .done
 .to_text_mode:
-    mov al, VGA_MODE_TEXT
-    jmp .done
+    mov  al, VGA_MODE_TEXT
+    jmp  .done
 
 .done:
-    mov [vga_mode], al
-    mov ah, 0
-    int 10h
-    pop ax
+    mov  [VgaMode], al
+    mov  ah, 0
+    int  10h
+    pop  ax
     ret
 
 
@@ -657,7 +625,7 @@ toggle_graphics:
 ; AX = number to print
 ;
 ;*****************************************************************************
-print_num_base10:
+PrintNumBase10:
     push ax
     push bx
     push cx
@@ -700,7 +668,7 @@ print_num_base10:
 ;        disk buffer to the disk
 ;
 ;*****************************************************************************
-write_to_disk_buffer:
+FillDiskBuffer:
     push  ax
     push  cx
     push  di
@@ -729,7 +697,7 @@ write_to_disk_buffer:
 ; (TEST) write the contents of ES:BX to disk
 ;
 ;*****************************************************************************
-write_disk_buffer_to_disk:
+WriteToDisk:
     pusha
     push es
     xor ax, ax
@@ -739,16 +707,16 @@ write_disk_buffer_to_disk:
     ; Write the buffer to LBA 36, where the file data is located
     xor dx, dx
     mov ax, 36
-    call lba_to_chs
+    call LbaToChs
 
     mov ax, 1
-    call disk_write
+    call DiskWrite
     cmp  ah, DISK_OK
-    je .write_ok
-    lea  si, msg_err
-    call tty_print
-    call print_num_base10
-    call tty_line_feed
+    je  .write_ok
+    lea  si, MsgError
+    call Print
+    call PrintNumBase10
+    call PutCrLf
 
 .write_ok:
     
@@ -770,7 +738,7 @@ write_disk_buffer_to_disk:
 ; Output: AH = 0 if successful
 ; 
 ;*****************************************************************************
-disk_write:
+DiskWrite:
     push dx
     push cx
 
@@ -785,7 +753,7 @@ disk_write:
     mov ch, [chsCylinder]    ; cylinder
     mov dh, [chsHead]        ; head
     mov cl, [chsSector]      ; sector 
-    call int13_with_retry
+    call Int13WithRetry
 
 .write_ok:
     pop cx
@@ -806,7 +774,7 @@ disk_write:
 ; Output:  CF = 0 if successful
 ;               1 if error
 ;*****************************************************************************
-int13_with_retry:
+Int13WithRetry:
 
     push cx
     push di
@@ -853,7 +821,7 @@ int13_with_retry:
 ; Input:  DX:AX = logical block address (LBA)
 ;
 ;*****************************************************************************
-lba_to_chs:
+LbaToChs:
     push bx
     push ax
     push dx
@@ -899,24 +867,22 @@ chsHead:             dw 0
 chsSector:           db 0
 
 
-vga_mode:            db VGA_MODE_GRAPHICS
-
-test_structure:      db 41h, 42h, 43h, 44h,45h, 0
-
-msg_time:            db "RTC Time: ", 0
-msg_memory_size:     db "Lower memory available (KiB): ", 0
-msg_drive_params:    db "Disk parameters - drive ",0
-msg_drive_params_1:  db "    Cylinders = ",0
-msg_drive_params_2:  db "        Sides = ",0
-msg_drive_params_3:  db " SecsPerTrack = ",0
-msg_err:             db "An error has occurred: ",0
-
-msg_drive_write:     db "Writing to disk...", 0
+VgaMode:             db VGA_MODE_GRAPHICS
+PixelColor:          db COLOR_BLUE
 
 
-msg_sec1:         db "Hello, sector 1!", 0
-msg_sec2:         db "Hello, sector 2!", 0
-msg_welcome:      db "Welcome to System23!", 0
+TestStructure:       db 41h, 42h, 43h, 44h,45h, 0
+
+MsgTime:             db "RTC Time: ", 0
+MsgMemorySize:       db "Lower memory available (KiB): ", 0
+MsgDriveParams:      db "Disk parameters - drive ",0
+MsgDriveParams1:     db "    Cylinders = ",0
+MsgDriveParams2:     db "        Sides = ",0
+MsgDriveParams3:     db " SecsPerTrack = ",0
+MsgError:            db "An error has occurred: ",0
+
+MsgDriveWrite:       db "Writing to disk...", 0
+MsgWelcome:          db "Welcome to System23!", 0
 
 
 times (SYS_SIZE_SECTORS * SECTOR_SIZE) - ($ - $$) db 0
