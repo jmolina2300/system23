@@ -3,43 +3,45 @@
 
 org SYSTEM_SEG
 begin:
-    mov dh, 20         ; 20 rows
-    mov dl, 80         ; 80 columns
-    call Cls           ; Clear them all...
+    mov   ah, COLOR_BLACK
+    mov   al, COLOR_LIGHT_GREY
+    mov   dh, 25         ; 20 rows
+    mov   dl, 80         ; 80 columns
+    call  Cls           ; Clear them all...
 
-    mov si, MsgWelcome
-    call Print
+    mov   si, MsgWelcome
+    call  Print
  
-    call PutCrLf
-    call PutCrLf
-    mov ah, func_tty
-    mov al, ASCII_BELL
-    int 10h
+    call  PutCrLf
+    call  PutCrLf
+    mov   ah, func_tty
+    mov   al, ASCII_BELL
+    int   10h
     
-    mov si, MsgMemorySize
-    call Print
+    mov   si, MsgMemorySize
+    call  Print
 
     ; Get lower memory size
     ;   AX will be the number of total kilobytes available
-    int 0x12            
-    call PrintNumBase10
-    call PutCrLf
+    int   0x12            
+    call  PrintNumBase10
+    call  PutCrLf
 
     ; Print the RTC time
     ;
-    mov si, MsgTime
-    call Print
-    call GetCurrentTime
-    mov si, TimeString
-    call Println
-    call PutCrLf
+    mov   si, MsgTime
+    call  Print
+    mov   si, TimeString
+    call  GetCurrentTime
+   
+    call  Println
+    call  PutCrLf
     
-
 
     ; Print drive parameters
     ;
-    mov  ax, [boot_drive]
-    call PutDriveParams
+    mov   ax, [boot_drive]
+    call  PutDriveParams
 
 
 
@@ -69,7 +71,7 @@ forever:
 ;*****************************************************************************
 PutDriveParams:
     push ax
-    mov si, MsgDriveParams
+    mov  si, MsgDriveParams
     call Print
     call PrintNumBase10
     call PutCrLf
@@ -293,17 +295,19 @@ Putc:
 ;*****************************************************************************
 ; Cls (clear screen)
 ;
-;   Input: dh = number of rows
-;          dl = number of columns
+;   Input: DH = number of rows
+;          DL = number of columns
+;          AH = BG color
+;          AL = FG color
 ;*****************************************************************************
 Cls:
     push cx
     push bx
     push ax
 
-    mov bh, COLOR_BLACK  ; Set background color
+    mov bh, ah   ; Set background color
     shl bh, 4
-    add bh, COLOR_WHITE  ; Set foreground color
+    add bh, al   ; Set foreground color
     mov al, 0
     mov ah, 6    ; Scroll function
     dec dh       ; row and col numbers minus 1 since the numbers are 0-based
@@ -344,7 +348,7 @@ BcdToDec:
 ;*****************************************************************************
 ; Get Current RTC time string
 ;
-; Input:   None
+; Input:   DS:SI = Array to hold time string
 ;
 ; Output:  Time stored in TimeString
 ;
@@ -359,10 +363,9 @@ GetCurrentTime:
     call BcdToDec
     add  al, '0'
     add  ah, '0'
-    lea  si, TimeString
     mov [si + 0], ah
     mov [si + 1], al
-                        ; Skip [si+2], the : character
+    mov [si + 3], byte ':'
 
     mov  al, cl         ; AL = Minutes
     call BcdToDec
@@ -370,7 +373,7 @@ GetCurrentTime:
     add  ah, '0'
     mov [si + 3], ah
     mov [si + 4], al
-                        ; Skip [si+5], the : character
+    mov [si + 5], byte ':'
 
     mov  al, dh         ; AL = seconds
     call BcdToDec
@@ -540,8 +543,7 @@ ProcessKey:
 .k4:
     cmp   ax, KEY_INS
     jne   .k5
-    ;call  FillDiskBuffer
-    ;call  WriteToDisk
+
     jmp   .done
 
     ;------------------------------
@@ -553,6 +555,14 @@ ProcessKey:
     cmp   bl, KEY_BUFFER_SIZE
     je    .done                 ; kbd_buffer_idx == kbd_buffer_size?
 
+
+    ;------------------------------
+    ; Ensure that AL is printable
+    ;------------------------------
+    cmp    al, 31
+    jle    .done
+    cmp    al, 127
+    jge    .done
     call   KeyBufferInsert     ; save the character
     call   Putc                ; print the character
 
@@ -564,7 +574,6 @@ ProcessKey:
     ret
 
 
-
 KeyBufferEmpty:
     push ax
     push cx
@@ -573,10 +582,11 @@ KeyBufferEmpty:
 
     mov byte [kbd_buffer_idx], 0   ; Reset keyboard buffer index
     mov cx, KEY_BUFFER_SIZE
-    lea si, empty_buffer
-    lea di, kbd_buffer
 
-    rep movsb
+    mov di, kbd_buffer
+    mov al, ' '                    ; Fill with spaces
+    cld
+    repnz stosb
 
     pop di
     pop si
@@ -892,10 +902,8 @@ LbaToChs:
 
 
 
-empty_buffer:   times KEY_BUFFER_SIZE  db 0
 kbd_buffer:     times KEY_BUFFER_SIZE  db 0
 kbd_buffer_idx:                        db 0
-kbd_enter:                             db 0
 
 
 drvSecsPerTrack:     db 0
@@ -915,7 +923,7 @@ TestStructure:       db 41h, 42h, 43h, 44h,45h, 0
 
 MsgTime:             db "RTC Time: ", 0
 MsgMemorySize:       db "Lower memory available (KiB): ", 0
-MsgDriveParams:      db "Disk parameters - drive ",0
+MsgDriveParams:      db "Disk parameters for drive ",0
 MsgDriveParams1:     db "    Cylinders = ",0
 MsgDriveParams2:     db "        Sides = ",0
 MsgDriveParams3:     db " SecsPerTrack = ",0
