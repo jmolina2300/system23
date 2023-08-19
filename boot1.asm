@@ -2,7 +2,7 @@
 
 
 org SYSTEM_SEG
-begin:
+Begin:
     mov   ah, COLOR_BLACK
     mov   al, COLOR_LIGHT_GREY
     mov   dh, 25         ; 20 rows
@@ -25,6 +25,8 @@ begin:
     ;   AX will be the number of total kilobytes available
     int   0x12            
     call  PrintNumBase10
+    mov   al, 'K'
+    call  Putc
     call  PutCrLf
 
     ; Print the RTC time
@@ -33,23 +35,35 @@ begin:
     call  Print
     mov   si, TimeString
     call  GetCurrentTime
-   
-    call  Println
+    call  Print
     call  PutCrLf
-    
+    call  PutCrLf
 
     ; Print drive parameters
     ;
     mov   ax, [boot_drive]
     call  PutDriveParams
 
+    ; Draw a nice line to finish off this section
+    ;
+    mov   al, '='
+    mov   cx, CLI_LIMIT_RIGHT
+.DrawLine:
+    call  Putc
+    dec   cx
+    test  cx,cx
+    jnz   .DrawLine
+    call  PutCrLf
 
 
     
-forever:
-    call ReadKey       ; get keystroke
-    call ProcessKey    ; process the keystroke
-    jmp  forever
+.ReadLoop:
+    mov   si, PromptString
+    call  Print
+    call  GetLine
+    call  ProcessKeyBuffer
+    call  ClearKeyBuffer
+    jmp   .ReadLoop
 
 
 
@@ -72,6 +86,10 @@ forever:
 PutDriveParams:
     push ax
     mov  si, MsgDriveParams
+    call Print
+    call PutCrLf
+
+    mov si, MsgDriveParams1
     call Print
     call PrintNumBase10
     call PutCrLf
@@ -110,12 +128,12 @@ PutDriveParams:
     add ax, cx                 ; AX = CH + ((CL & 0xC0) << 2)
     inc ax
     mov [drvCylinders], ax
-    mov si, MsgDriveParams1    ; 1 Number of cylinders
+    mov si, MsgDriveParams2    ; 1 Number of cylinders
     call Print
     call PrintNumBase10
     call PutCrLf
 
-    mov si, MsgDriveParams2    ; 2 Number of sides/heads (0-based)
+    mov si, MsgDriveParams3    ; 2 Number of sides/heads (0-based)
     call Print
     pop ax                     ; restore DH=sides
     shr ax, 8
@@ -124,7 +142,7 @@ PutDriveParams:
     call PrintNumBase10
     call PutCrLf
 
-    mov si, MsgDriveParams3    ; 3 Sectors per track
+    mov si, MsgDriveParams4    ; 3 Sectors per track
     call Print
     pop ax                     ; restore CL=SecsPerTrack
     and ax, 0xff
@@ -230,9 +248,6 @@ draw_loop2:
 
 
 
-
-
-
 ;*****************************************************************************
 ; Print a 0-terminated string
 ;
@@ -249,7 +264,7 @@ Print:
     mov cx, 1
 .loop:
     lodsb          ; AL = DS:SI
-    and al, al     ; AL == 0?
+    test al, al    ; AL == 0?
     jz .done
     int 10h
     jmp .loop
@@ -419,11 +434,14 @@ ProcessKeyBuffer:
     lodsb
 
 .isItCommand:
-    cmp  al, ':'
-    jne  .done    ; Nope, not a command
+    cmp  al, ' '
+    je  .done     ; Nope, not a command
+
+    test al,al
+    jz  .done
     
-    lodsb         ; Maybe a command -- look at the next byte
-    ; Write command
+
+    ; Write command (is there anything to write in the keyboard buffer?)
 .command1:
     cmp  al, 'w'
     jne  .command2
@@ -472,59 +490,44 @@ ProcessKeyBuffer:
 
 
 ;*****************************************************************************
-; Read key input
+; GetLine
 ;
 ;*****************************************************************************
-ReadKey:
-    mov ah, 0
-    int 16h        
-    ret
-
-
-;*****************************************************************************
-; Process key input
-;
-;*****************************************************************************
-ProcessKey:
+GetLine:
     push   ax
     push   bx
     push   di
     push   cx
 
+.getKey:
+    mov ah, 0
+    int 16h
+
     ;------------------------------
     ; ENTER/RETURN
     ;------------------------------
+.k1:
     cmp   ax, KEY_RETURN
     jne   .k2
     call  PutCrLf      ; Advance the line
-    call  ProcessKeyBuffer   ; Check the key buffer for commands
-    call  KeyBufferEmpty     ; Empty the key buffer
-
     jmp   .done
-
-    ;------------------------------
-    ; TAB
-    ;------------------------------
-.k2:
-    cmp   ax, KEY_TAB
-    jne   .k3
-    call  ToggleGraphics
-    jmp   .done
-
 
     ;------------------------------
     ; Backspace
     ;------------------------------
-.k3:
+.k2:
     cmp   ax, KEY_BACKSPACE
-    jne   .k4
+    jne   .k3
 
     xor   bx,bx     ; Get cursor position...
     mov   ah, 3
     int   10h
 
     cmp    dl,CLI_LIMIT_LEFT
-    je    .done
+    je    .getKey
+    cmp    byte [kbd_buffer_idx], 0
+    je    .getKey
+
     dec   dl        ; Move back 1 space...
     mov   ah, 2
     int   10h
@@ -534,37 +537,29 @@ ProcessKey:
     mov   ah, 0xA
     int   10h
     call  KeyBufferRemove
-    jmp   .done
-
-
-    ;------------------------------
-    ; INSERT
-    ;------------------------------
-.k4:
-    cmp   ax, KEY_INS
-    jne   .k5
-
-    jmp   .done
+    jmp   .getKey
 
     ;------------------------------
     ; Any other key was pressed
     ;------------------------------
-.k5:
+.k3:
     xor   bx, bx
     mov   bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
     cmp   bl, KEY_BUFFER_SIZE
-    je    .done                 ; kbd_buffer_idx == kbd_buffer_size?
+    je    .getKey               ; kbd_buffer_idx == kbd_buffer_size?
 
 
     ;------------------------------
     ; Ensure that AL is printable
     ;------------------------------
     cmp    al, 31
-    jle    .done
+    jle    .getKey
     cmp    al, 127
-    jge    .done
+    jge    .getKey
     call   KeyBufferInsert     ; save the character
     call   Putc                ; print the character
+
+    jmp    .getKey             ; Get the next key
 
 .done:
     pop   cx
@@ -574,7 +569,11 @@ ProcessKey:
     ret
 
 
-KeyBufferEmpty:
+;*****************************************************************************
+; Clear Key Buffer
+;
+;*****************************************************************************
+ClearKeyBuffer:
     push ax
     push cx
     push si
@@ -765,6 +764,7 @@ WriteToDisk:
     je  .write_ok
     lea  si, MsgError
     call Print
+    mov  al, ':'
     call PrintNumBase10
     call PutCrLf
 
@@ -922,16 +922,19 @@ PixelColor:          db COLOR_BLUE
 TestStructure:       db 41h, 42h, 43h, 44h,45h, 0
 
 MsgTime:             db "RTC Time: ", 0
-MsgMemorySize:       db "Lower memory available (KiB): ", 0
-MsgDriveParams:      db "Disk parameters for drive ",0
-MsgDriveParams1:     db "    Cylinders = ",0
-MsgDriveParams2:     db "        Sides = ",0
-MsgDriveParams3:     db " SecsPerTrack = ",0
-MsgError:            db "An error has occurred: ",0
+MsgMemorySize:       db "Lower memory available: ", 0
+MsgDriveParams:      db "Boot drive geometry ",0
+MsgDriveParams1:     db "  Drive Number: ",0
+MsgDriveParams2:     db "     Cylinders: ",0
+MsgDriveParams3:     db "         Sides: ",0
+MsgDriveParams4:     db "  SecsPerTrack: ",0
+MsgError:            db "An error has occurred",0
 
 MsgDriveWrite:       db "Writing to disk...", 0
 MsgWelcome:          db "Welcome to System23!", 0
 
 TimeString:          db "  :  :  ",0
+
+PromptString:        db "@: ",0
 
 times (SYS_SIZE_SECTORS * SECTOR_SIZE) - ($ - $$) db 0
