@@ -6,27 +6,27 @@ org 7C00h
     nop
 ;=============================================================================
 ;     Begin DOS 2.0 BPB 
-db 'L','A','B','E','L',0,0,0
-BytesPerSector:     dw 512     ; sector size in bytes
-SectorsPerCluster:  db 1       ; sectors per cluster
-ReservedSectors:    dw 1+SYS_SIZE_SECTORS  ; number of reserved sectors
-NumFATs:            db 2       ; number of FATs 
-NumDirEntries:      dw 224     ; number of entries in root directory
-TotalSectors_16:    dw 2880    ; total sectors (if number fits in 16 bits)
-MediaByte:          db 0xF0    ; media description byte
-NumSectorsPerFAT:   dw 9       ; sectors per FAT
+BS_OEMName:          db "JOM     "
+BPB_BytesPerSec:     dw 512
+BPB_SecPerClus:      db 1
+BPB_RsvdSecCnt:      dw 1+SYS_SIZE_SECTORS
+BPB_NumFATs:         db 2
+BPB_RootEntCnt:      dw 224
+BPB_TotSec16:        dw 2880
+BPB_Media:           db 0xF0
+BPB_FATsz16:         dw 9
 ;=============================================================================
 ;     Begin DOS 3.0 BPB stuff
-NumSectorsPerTrack: dw 18             ; sectors per track
-NumHeads:           dw 2              ; heads per cylinder
-NumHiddenSectors:   dd 0              ; number of hidden sectors
-TotalSectors_32:    dd 0              ; total sectors (if its a 32-bit number)
-BootDrive:          db 0              ; drive number (0 for now)
-Unused:             db 0
-BpbVersion:         db 0x29           ; BIOS parameter block version
-VolumeSerial:       dd 0xDEADCAFE     ; volume serial number
-VolumeLabel:        db "SYSTEM23   "  ; volume label
-FileSystemType:     db "FAT12   "     ; file system type
+BPB_SecPerTrk:      dw 18
+BPB_NumHeads:       dw 2
+BPB_HiddSec:        dd 0
+BPB_TotSec32:       dd 0
+BS_DrvNum:          db 0
+BS_Reserved1:       db 0
+BS_BootSig:         db 0x29
+BS_VolID:           dd 0xDEADCAFE
+BS_VolLab:          db "SYSTEM23   "
+BS_FilSysType:      db "FAT12   "
 ;=============================================================================
 ;     End BPB
 start:
