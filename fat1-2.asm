@@ -37,24 +37,24 @@ times ((FAT_SIZE_SECTORS * SECTOR_SIZE) - 16)  db 0x00
 
 
 
-struc   mystruct
-DIR_Name:          resb 11
-DIR_Atrr:          resb 1
-DIR_NTRes:         resb 1
-DIR_CrtTimeTenth:  resb 1
-DIR_CrtTime:       resw 1
-DIR_CrtDate:       resw 1
-DIR_LstAccDate:    resw 1
-DIR_FstClusHi:     resw 1
-DIR_WrtTime:       resw 1
-DIR_WrtDate:       resw 1
-DIR_FstClusLo:     resw 1
-DIR_FileSize:      resd 1
+struc   DirEntry
+    DIR_Name:          resb 11
+    DIR_Atrr:          resb 1
+    DIR_NTRes:         resb 1
+    DIR_CrtTimeTenth:  resb 1
+    DIR_CrtTime:       resw 1
+    DIR_CrtDate:       resw 1
+    DIR_LstAccDate:    resw 1
+    DIR_FstClusHi:     resw 1
+    DIR_WrtTime:       resw 1
+    DIR_WrtDate:       resw 1
+    DIR_FstClusLo:     resw 1
+    DIR_FileSize:      resd 1
 endstruc
 
 
 VolumeID:
-    istruc mystruct
+    istruc DirEntry
         at DIR_Name,          db "VolumeID   "
         at DIR_Atrr,          db 0x28
         at DIR_NTRes,         db 0x00
@@ -70,7 +70,7 @@ VolumeID:
     iend
 
 MainFile:
-    istruc mystruct
+    istruc DirEntry
         at DIR_Name,          db "MAINFILETXT"
         at DIR_Atrr,          db 0x21
         at DIR_NTRes,         db 0x00
