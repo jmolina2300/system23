@@ -39,24 +39,45 @@ COLOR_WHITE         EQU 0xF
 
 
 
-
 ;*****************************************************************************
 ; System organization
 ;*****************************************************************************
-DIR_ENTRY_SIZE         EQU 32
-DIR_ENTRIES            EQU 224
-SECTOR_SIZE            EQU 512
-SYS_SIZE_SECTORS       EQU 3
-FAT_SIZE_SECTORS       EQU 9
-
-VGA_MEMORY_SEG   EQU 0xA000
-SYSTEM_SEG       EQU 0x2000
-STACK_SEG        EQU 0x7000
-DISK_BUFF_SEG    EQU 0x9000
+SIZE_DIR_ENTRY         EQU 32   ; in BYTES
+SIZE_SECTOR            EQU 512  ; in BYTES
+SIZE_DISKBUFFER        EQU 2    ; in sectors
+SIZE_SYSTEM            EQU 5    ; in sectors
 
 
-; Known location where to save the boot drive so it can be used in stage 2
-boot_drive       EQU 0x7DEA
+;*****************************************************************************
+; FAT16 BPB values
+;*****************************************************************************
+FAT16_BytesPerSec      EQU 512
+FAT16_SecPerClus       EQU 2
+FAT16_RsvdSecCnt       EQU 1+SIZE_SYSTEM
+FAT16_NumFATs          EQU 2
+FAT16_RootEntCnt       EQU 512
+FAT16_TotSec16         EQU 20480
+FAT16_Media            EQU 0xF8
+FAT16_FATsz16          EQU 20
+FAT16_SecPerTrk        EQU 32
+FAT16_NumHeads         EQU 2
+FAT16_HiddSec          EQU 0
+FAT16_TotSec32         EQU 0
+FAT16_DrvNum           EQU 0x80
+
+
+;*****************************************************************************
+; Memory Locations
+;*****************************************************************************
+VGA_MEMORY_SEG    EQU 0xA000
+
+SEG_BOOT          EQU 0x07C0
+SEG_SYSTEM        EQU 0x0050
+SEG_STACK         EQU 0x0800
+SEG_DISKBUFF      EQU 0x2000
+
+
+
 
 
 ; Disk error codes

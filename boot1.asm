@@ -1,13 +1,35 @@
 %include "equates.inc"
 
+%macro  pushall 0
+    pusha
+    push  ds
+    push  es
+%endmacro
 
-org SYSTEM_SEG
+%macro  popall 0
+    pop es
+    pop ds
+    popa
+%endmacro
+
+org 0x0000
 Begin:
+    ; First, make sure DS = CS = ES
+    ;
+    mov   ax, SEG_SYSTEM
+    mov   es, ax
+    mov   ds, ax
+    
+    ; Next, lets save that drive number from earlier
+    ;
+    mov [drvBoot], dl
+
+
     mov   ah, COLOR_BLACK
     mov   al, COLOR_LIGHT_GREY
     mov   dh, 25         ; 20 rows
     mov   dl, 80         ; 80 columns
-    call  Cls           ; Clear them all...
+    call  Cls            ; Clear them all...
 
     mov   si, MsgWelcome
     call  Print
@@ -41,8 +63,9 @@ Begin:
 
     ; Print drive parameters
     ;
-    mov   ax, [boot_drive]
+    mov   ax, [drvBoot]
     call  PutDriveParams
+
 
     ; Draw a nice line to finish off this section
     ;
@@ -53,12 +76,13 @@ Begin:
     dec   cx
     test  cx,cx
     jnz   .DrawLine
-    call  PutCrLf
+    call  PutCrLf    
+
 
 
     
 .ReadLoop:
-    mov   si, PromptString
+    mov   si,PromptString
     call  Print
     call  GetLine
     call  ProcessKeyBuffer
@@ -67,6 +91,164 @@ Begin:
 
 
 
+
+Dir:
+    pushall
+
+    mov   ax, SEG_DISKBUFF
+    mov   es, ax
+    mov   bx, 0              ; ES:BX = diskbuff location
+    mov   si, 0              ; DS:SI = diskbuff location too
+      
+    
+    ;----
+    ; Save the number of sectors to read
+    ;----
+    mov  word [cs:RemainingSecs], (FAT16_RootEntCnt * 32) /  SIZE_SECTOR
+    
+
+    ;----
+    ; Store the starting sector of the Root Dir
+    ;----
+    mov   word [cs:CurrentSecNum], 46
+.nextDiskChunk:
+
+    xor   dx,dx
+    mov   ax,[cs:CurrentSecNum]  ; Set current sector num
+    mov   cx,SIZE_DISKBUFFER     ; Set number of sectors to read
+    call  DiskRead               ; Do Disk Read
+    cmp   ah, DISK_OK
+    je    .readOK
+    call  DiskPrintStatus
+    jmp   .endOfDirectory
+    
+
+.readOK:
+
+    add   word [cs:CurrentSecNum], SIZE_DISKBUFFER 
+    mov   cx,[cs:RemainingSecs]    ; Increment CurrentSecNum by count of sectors we read
+    sub   cx,SIZE_DISKBUFFER       ; Decrement RemainingSecs by count of sectors we read
+    jz    .endOfDirectory          ; If RemainingSecs == 0, then we are done
+    mov   [cs:RemainingSecs],cx    ;   Otherwise, save RemainingSecs count
+
+
+    push  es
+    pop   ds
+    mov   si,0     ; Reset SI to beginning of segment
+.readEntry:
+
+    cmp  byte [si], 0
+    je   .endOfDirectory
+    cmp  byte [si], 0xE5
+    je   .nextEntry
+
+    call  DirReadEntry
+.nextEntry:
+    add   si,32
+    ;----
+    ; Check if we reached the end of the disk buffer
+    ; If so, read another 2 blocks
+    ;----
+    cmp   si, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
+    je   .nextDiskChunk
+    jmp  .readEntry
+
+
+.endOfDirectory:
+
+    popall
+    ret
+
+
+
+;*****************************************************************************
+; Dir Read Entry
+;
+; Description:
+;
+;   Reads the information out of a dir entry and puts it in a buffer to be
+;   printed out afterwards
+;
+; Input:   DS:SI = pointer to dir entry
+;
+; Output:  ES:DI = buffer with information
+; 
+;*****************************************************************************
+DirReadEntry:
+    ;----
+    ; Read first 11 bytes for file name
+    ; If first byte is one of the markers (0xE5, 0x00, etc) skip it.
+    ;----
+    pushall
+
+    ;----
+    ; Set up output buffer to receive the file information
+    ;----
+    push  cs
+    pop   es
+    mov   di, DirEntryBuffer
+
+    ;----
+    ; Begin reading the directory entry
+    ;----
+    mov   cx, 11
+    rep   movsb
+
+    
+    ;----
+    ; Print out whatever is inside the buffer
+    ;----
+    push cs
+    pop  ds
+    mov  si, DirEntryBuffer    ; Load DS:SI with DirEntryBuffer
+    call Println
+
+
+    popall
+    ret
+
+
+
+;*****************************************************************************
+; Load Executable
+; 
+; Description:
+;
+;   Loads 128-sector executables into memory.
+;
+; Input:  
+;
+;      AX = Start sector of the executable on disk
+;   ES:BX = Location in memory where to load
+;
+;
+; Output:
+;
+;      AX = 0 if successful
+;           1 if error
+;
+;*****************************************************************************
+LoadExecutable:
+    push  cx
+    push  dx
+
+    mov   ax, SEG_DISKBUFF
+    mov   es, ax
+    mov   bx, 100h
+
+
+    xor   dx,dx
+    mov   ax, 78
+    mov   cx, 128
+    call  DiskRead
+    cmp   ah, DISK_OK
+    je    .LoadSuccess
+
+
+.LoadSuccess:
+    pop   dx
+    pop   cx
+    ret
 
 
 ;*****************************************************************************
@@ -84,6 +266,8 @@ Begin:
 ;
 ;*****************************************************************************
 PutDriveParams:
+    pushall
+
     push ax
     mov  si, MsgDriveParams
     call Print
@@ -97,6 +281,10 @@ PutDriveParams:
     ;---
     ; BIOS function 13/8 - Get drive parameters
     ;
+    ; Input: 
+    ; DL = Drive Number
+    ;
+    ; Return:
     ; CH = Cylinders 
     ; CL = SecsPerTrack
     ; DH = Sides/Heads
@@ -145,13 +333,15 @@ PutDriveParams:
     mov si, MsgDriveParams4    ; 3 Sectors per track
     call Print
     pop ax                     ; restore CL=SecsPerTrack
-    and ax, 0xff
+    and ax, 0x3f
     mov [drvSecsPerTrack], ax
     call PrintNumBase10
     call PutCrLf
 
 .error:
     call PutCrLf
+
+    popall
     ret
 
 
@@ -428,7 +618,6 @@ PutPixel:
 ;*****************************************************************************
 ProcessKeyBuffer:
     pusha
-    push ds
 
     mov si, kbd_buffer
     lodsb
@@ -457,15 +646,20 @@ ProcessKeyBuffer:
     ; VGA test
 .command3:
     cmp   al, 'v'
-    jne  .badCommand
+    jne  .command4
     jmp  .doVGA
+
+.command4:
+    cmp al, 'd'
+    jne  .badCommand
+    jmp  .doDir
 
 
 .doWrite:
-    call  FillDiskBuffer
-    call  WriteToDisk
+    call  WriteKeyBufferToDisk  ; Write the keybuffer to disk
     mov   si, MsgDriveWrite
     call  Println
+    call  DiskPrintStatus       ; Print Drive status
     jmp   .done
 
 .doBell:
@@ -477,14 +671,16 @@ ProcessKeyBuffer:
     call VgaTest
     jmp .done
 
+.doDir:
+    call Dir
+    jmp .done
+
 .badCommand:
-    xor   ax,ax
-    mov   ds, ax      ; DS=0 (future: bad assumption)
     mov   si, MsgError
     call  Println
 
 .done:
-    pop ds
+
     popa
     ret
 
@@ -717,7 +913,7 @@ PrintNumBase10:
 ;        disk buffer to the disk
 ;
 ;*****************************************************************************
-FillDiskBuffer:
+CopyKeyBufferToDiskBuffer:
     push  ax
     push  cx
     push  di
@@ -725,10 +921,13 @@ FillDiskBuffer:
     push  es
     push  ds
 
-    xor  ax, ax             ; Set ES=DS=0 (future: not a safe assumption)
+    mov  ax, SEG_DISKBUFF
     mov  es, ax
-    mov  ds, ax
-    mov  di, DISK_BUFF_SEG
+    mov  di, 0                 ; ES:DI = &DISKBUFF
+
+    push cs
+    pop  ds                    ; DS = CS
+
     mov  cx, KEY_BUFFER_SIZE
     lea  si, kbd_buffer
 
@@ -745,41 +944,44 @@ FillDiskBuffer:
 ;*****************************************************************************
 ; (TEST) write the contents of ES:BX to disk
 ;
+; Output:
+;
+;   AL = status of write
+;
 ;*****************************************************************************
-WriteToDisk:
-    pusha
+WriteKeyBufferToDisk:
+    push dx
     push es
-    xor ax, ax
+
+    call CopyKeyBufferToDiskBuffer
+
+    mov ax, SEG_DISKBUFF
     mov es, ax
-    mov bx, DISK_BUFF_SEG
+    mov bx, 0
 
     ; Write the buffer to LBA 36, where the file data is located
+    ;   FAT12, LBA = 36
+    ;   FAT16, LBA = 78
+
     xor dx, dx
-    mov ax, 36
-    call LbaToChs
-
-    mov ax, 1
+    mov ax, 78        ; Start at sector 78
+    mov cx, 1         ; Write 1 sector
     call DiskWrite
-    cmp  ah, DISK_OK
-    je  .write_ok
-    lea  si, MsgError
-    call Print
-    mov  al, ':'
-    call PrintNumBase10
-    call PutCrLf
-
-.write_ok:
+                    ; Leave status code in AX register
     
-    pop es
-    popa
+
+    pop es 
+    pop dx
     ret
 
 
 ;*****************************************************************************
 ; Disk Write Sectors
 ;  
-; Input:  AX = number of sectors to write
-;         
+; Input:    AX = logical starting sector
+;           CX = number of sectors to write
+;        ES:BX = disk buffer pointer
+;
 ;         Uses the CHS values stored at
 ;           chsCylinder
 ;           chsHead
@@ -792,13 +994,13 @@ DiskWrite:
     push dx
     push cx
 
-    mov si, ax               ; Save the number of sectors to write
+    call LbaToChs
 
-    mov dl, [boot_drive]     ; Select the original boot drive
+    mov dl, [drvBoot]        ; Select the original boot drive
     xor ax, ax
     int 13h                  ; Reset disk, int 13/ah=0
 
-    mov ax, si               ; al = number of sectors to write
+    mov ax, cx               ; al = number of sectors to write
     mov ah, 3                ; Write sectors function
     mov ch, [chsCylinder]    ; cylinder
     mov dh, [chsHead]        ; head
@@ -809,6 +1011,69 @@ DiskWrite:
     pop cx
     pop dx
     ret
+
+
+
+
+;*****************************************************************************
+; Disk Read Sectors
+;  
+; Input:    AX = logical starting sector
+;           CX = number of sectors to read
+;        ES:BX = disk buffer pointer
+;         
+;        Uses the CHS values stored at
+;           chsCylinder
+;           chsHead
+;           chsSector
+;
+; Output: AH = 0 if successful
+; 
+;*****************************************************************************
+DiskRead:
+    push dx
+    push cx
+
+    
+    call LbaToChs            ; First, convert the LBA in AX to CHS
+
+    mov dl, [drvBoot]        ; Select the original boot drive
+    xor ax, ax
+    int 13h                  ; Reset disk
+
+    mov ax, cx               ; al = number of sectors to read
+    mov ah, 2                ; Read sectors function
+    mov ch, [chsCylinder]    ; cylinder
+    mov dh, [chsHead]        ; head
+    mov cl, [chsSector]      ; sector 
+    call Int13WithRetry
+
+.write_ok:
+    pop cx
+    pop dx
+    ret
+
+
+DiskPrintStatus:
+    push  ax
+    push  ds
+    push  si
+
+    mov   ah,1
+    int   13h
+    push  cs
+    pop   ds
+    mov   si, MsgDriveError
+    call  Print
+    and   ax, 0xFF
+    call  PrintNumBase10
+    call  PutCrLf
+
+    pop   si
+    pop   ds
+    pop   ax
+    ret
+
 
 
 ;*****************************************************************************
@@ -840,7 +1105,7 @@ Int13WithRetry:
     int  13h             ; BIOS diskette service
     pop  cx              ; Restore loop counter
     jc   .time_out
-    jmp short .done
+    jmp  .done
 
 .time_out: 
     cmp    ah,DISK_TIMEOUT
@@ -868,32 +1133,37 @@ Int13WithRetry:
 ;*****************************************************************************
 ; LBA to CHS
 ;
+; WARNING: Be sure to CLEAR DX before the call if the LBA is only 16 bits!
+;
 ; Input:  DX:AX = logical block address (LBA)
 ;
+;      
+; 
 ;*****************************************************************************
 LbaToChs:
     push bx
     push ax
     push dx
+
     ;
     ; let temp = AX
     ;
-    lea bx, drvSecsPerTrack
-    div word [bx]                ; temp = lba / (sectorspertrack)
-    inc dl                       ; adjust for sector 0
-    lea bx, chsSector
-    mov byte [bx], dl            ; sector = (lba % (sectorspertrack)) + 1
+    mov bx, cs:drvSecsPerTrack
+    div word [cs:bx]              ; temp = lba / (sectorspertrack) ; ERROR HERE
+    inc dl                        ; adjust for sector 0
+    mov bx, cs:chsSector
+    mov byte [cs:bx], dl          ; sector = (lba % (sectorspertrack)) + 1
     xor dx, dx 
-    lea bx, drvHeads
+    mov bx, cs:drvHeads
     ;
     ; at this point, temp (AX) is still the quotient from earlier
     ;
-    div word [bx]
-    lea bx, chsHead
-    mov byte [bx], dl            ; head = temp % (numberofheads)
+    div word [cs:bx]
+    mov bx, cs:chsHead
+    mov byte [cs:bx], dl          ; head = temp % (numberofheads)
 
-    lea bx, chsCylinder
-    mov byte [bx], al            ; cylinder = temp / (numberofheads)
+    mov bx, cs:chsCylinder
+    mov byte [cs:bx], al          ; cylinder = temp / (numberofheads)
 
     pop dx
     pop ax
@@ -906,9 +1176,11 @@ kbd_buffer:     times KEY_BUFFER_SIZE  db 0
 kbd_buffer_idx:                        db 0
 
 
+drvBoot:             db 0
 drvSecsPerTrack:     db 0
 drvCylinders:        dw 0
 drvHeads:            dw 0
+
 
 chsCylinder:         dw 0
 chsHead:             dw 0
@@ -929,6 +1201,7 @@ MsgDriveParams2:     db "     Cylinders: ",0
 MsgDriveParams3:     db "         Sides: ",0
 MsgDriveParams4:     db "  SecsPerTrack: ",0
 MsgError:            db "An error has occurred",0
+MsgDriveError:       db "Drive status: ",0
 
 MsgDriveWrite:       db "Writing to disk...", 0
 MsgWelcome:          db "Welcome to System23!", 0
@@ -937,4 +1210,11 @@ TimeString:          db "  :  :  ",0
 
 PromptString:        db "@: ",0
 
-times (SYS_SIZE_SECTORS * SECTOR_SIZE) - ($ - $$) db 0
+;
+; File/Directory Stuff
+;
+DirEntryBuffer:   times SIZE_DIR_ENTRY db 0
+CurrentSecNum:    dw 0
+RemainingSecs:    dw 0
+
+times (SIZE_SYSTEM * SIZE_SECTOR) - ($ - $$) db 0

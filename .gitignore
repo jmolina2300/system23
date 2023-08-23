@@ -1,3 +1,5 @@
 *.img
 *.bin
 *.o
+extras/
+.vscode/
