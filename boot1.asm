@@ -993,7 +993,7 @@ WriteKeyBufferToDisk:
 DiskWrite:
     push dx
     push cx
-
+    
     call LbaToChs
 
     mov dl, [drvBoot]        ; Select the original boot drive
@@ -1144,27 +1144,26 @@ LbaToChs:
     push bx
     push ax
     push dx
-
+    push ds
+    
+    push  cs
+    pop   ds                      ; Make sure DS=CS since all the labels are here
     ;
     ; let temp = AX
     ;
-    mov bx, cs:drvSecsPerTrack
-    div word [cs:bx]              ; temp = lba / (sectorspertrack) ; ERROR HERE
-    inc dl                        ; adjust for sector 0
-    mov bx, cs:chsSector
-    mov byte [cs:bx], dl          ; sector = (lba % (sectorspertrack)) + 1
+    div word [drvSecsPerTrack]    ; temp = lba / (sectorspertrack)
+    inc dl                        ; adjust for sector 
+    mov byte [chsSector], dl      ; sector = (lba % (sectorspertrack)) + 1
     xor dx, dx 
-    mov bx, cs:drvHeads
     ;
-    ; at this point, temp (AX) is still the quotient from earlier
+    ;   Head will be in AX
+    ;   Remainder is in DX
     ;
-    div word [cs:bx]
-    mov bx, cs:chsHead
-    mov byte [cs:bx], dl          ; head = temp % (numberofheads)
+    div word [drvHeads]
+    mov byte [chsHead], dl        ; head = temp % (numberofheads)
+    mov byte [chsCylinder], al    ; cylinder = temp / (numberofheads)
 
-    mov bx, cs:chsCylinder
-    mov byte [cs:bx], al          ; cylinder = temp / (numberofheads)
-
+    pop ds
     pop dx
     pop ax
     pop bx
