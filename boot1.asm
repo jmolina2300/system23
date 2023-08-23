@@ -656,10 +656,13 @@ ProcessKeyBuffer:
 
 
 .doWrite:
-    call  WriteKeyBufferToDisk  ; Write the keybuffer to disk
     mov   si, MsgDriveWrite
     call  Println
-    call  DiskPrintStatus       ; Print Drive status
+    call  WriteKeyBufferToDisk  ; Write the keybuffer to disk
+    cmp   ah, DISK_OK
+    je    .writeOK
+    call  DiskPrintStatus       ; Print Drive status if error
+.writeOK
     jmp   .done
 
 .doBell:
@@ -923,15 +926,15 @@ CopyKeyBufferToDiskBuffer:
 
     mov  ax, SEG_DISKBUFF
     mov  es, ax
-    mov  di, 0                 ; ES:DI = &DISKBUFF
+    mov  di, 0         ; ES:DI = &DISKBUFF
 
     push cs
-    pop  ds                    ; DS = CS
+    pop  ds            ; DS = CS
 
     mov  cx, KEY_BUFFER_SIZE
     lea  si, kbd_buffer
 
-    rep  movsb              ; copy byte from ds:[si] to es:[di] until cx=0
+    rep  movsb         ; copy byte from ds:[si] to es:[di] until cx=0
 
     pop  ds
     pop  es
@@ -946,7 +949,7 @@ CopyKeyBufferToDiskBuffer:
 ;
 ; Output:
 ;
-;   AL = status of write
+;   AH = status of write
 ;
 ;*****************************************************************************
 WriteKeyBufferToDisk:
