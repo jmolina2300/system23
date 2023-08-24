@@ -65,6 +65,7 @@ FAT16_HiddSec          EQU 0
 FAT16_TotSec32         EQU 0
 FAT16_DrvNum           EQU 0x80
 
+FAT16_RootDirSecStart  EQU FAT16_RsvdSecCnt+(FAT16_FATsz16 * 2)
 
 ;*****************************************************************************
 ; Memory Locations
@@ -117,3 +118,19 @@ VGA_MODE_TEXT      EQU 03h
 
 CLI_LIMIT_LEFT     EQU 0
 CLI_LIMIT_RIGHT    EQU 80
+
+
+struc   DirEntry
+    DIR_Name:          resb 11
+    DIR_Atrr:          resb 1
+    DIR_NTRes:         resb 1
+    DIR_CrtTimeTenth:  resb 1
+    DIR_CrtTime:       resw 1
+    DIR_CrtDate:       resw 1
+    DIR_LstAccDate:    resw 1
+    DIR_FstClusHi:     resw 1
+    DIR_WrtTime:       resw 1
+    DIR_WrtDate:       resw 1
+    DIR_FstClusLo:     resw 1
+    DIR_FileSize:      resd 1
+endstruc

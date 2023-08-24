@@ -110,7 +110,7 @@ Dir:
     ;----
     ; Store the starting sector of the Root Dir
     ;----
-    mov   word [cs:CurrentSecNum], 46
+    mov   word [cs:CurrentSecNum], FAT16_RootDirSecStart
 .nextDiskChunk:
 
     xor   dx,dx
@@ -137,12 +137,12 @@ Dir:
     mov   si,0     ; Reset SI to beginning of segment
 .readEntry:
 
-    cmp  byte [si], 0
-    je   .endOfDirectory
-    cmp  byte [si], 0xE5
-    je   .nextEntry
+    cmp   byte [si], 0
+    je    .endOfDirectory
+    cmp   byte [si], 0xE5
+    je    .nextEntry
 
-    call  DirReadEntry
+    call  DirEntryRead
 .nextEntry:
     add   si,32
     ;----
@@ -150,8 +150,8 @@ Dir:
     ; If so, read another 2 blocks
     ;----
     cmp   si, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
-    je   .nextDiskChunk
-    jmp  .readEntry
+    je    .nextDiskChunk
+    jmp   .readEntry
 
 
 .endOfDirectory:
@@ -174,7 +174,7 @@ Dir:
 ; Output:  ES:DI = buffer with information
 ; 
 ;*****************************************************************************
-DirReadEntry:
+DirEntryRead:
     ;----
     ; Read first 11 bytes for file name
     ; If first byte is one of the markers (0xE5, 0x00, etc) skip it.
@@ -186,26 +186,105 @@ DirReadEntry:
     ;----
     push  cs
     pop   es
-    mov   di, DirEntryBuffer
+    mov   di, DirEntryReal
 
     ;----
-    ; Begin reading the directory entry
+    ; Read in one 32-byte entry
     ;----
-    mov   cx, 11
+    mov   cx, SIZE_DIR_ENTRY
     rep   movsb
 
     
     ;----
     ; Print out whatever is inside the buffer
     ;----
-    push cs
-    pop  ds
-    mov  si, DirEntryBuffer    ; Load DS:SI with DirEntryBuffer
-    call Println
-
+    push  cs
+    pop   ds
+    mov   si, DirEntryReal
+    call  DirEntryPrint
 
     popall
     ret
+    
+
+
+
+;*****************************************************************************
+; DirEntryPrint
+;
+; Description:
+;
+;   Pulls out the contents of a directory entry in DS:SI and prints them out 
+;   in one nicely-formatted string
+;
+; Input:    
+;  
+;   DS:SI = real Directory Entry
+;
+; Output:
+;
+;   None
+;
+;*****************************************************************************
+DirEntryPrint:
+    pushall
+    
+    push  cs
+    pop   es
+    mov   di,DirEntrySummary ; ES:DI = Dir Entry summary buffer
+    mov   al,'-'
+    stosb
+    stosb
+    mov   al,' '
+    stosb
+    
+    mov   cx, 11             ; 11 bytes for the name
+    rep   movsb              ; copy it over to DirEntrySummary
+    
+    mov   ax, ' '
+    stosb
+    stosb 
+    stosb
+    mov   al,'s'
+    stosb
+    mov   al,'i'
+    stosb
+    mov   al,'z'
+    stosb
+    mov   al,'e'
+    stosb
+    mov   al, ':'
+    stosb
+    mov   al, ' '
+    stosb
+.putSizeInHex:               ; Print the file size in bytes (in hex for now)
+    mov   cx,4               ; CX = Number of 4-bit shifts to perform
+    mov   si,DirEntryReal+DIR_FileSize
+    mov   ax,word [si]
+.rightShift: 
+    push  ax
+    shr   ax,4
+    dec   cx
+    jnz  .rightShift
+    
+    mov   cx,4
+.unrollDigits:
+    pop   bx
+    and   bx,0x000F
+    mov   al, byte [HexDigits + bx]
+    stosb
+    dec   cx
+    jnz   .unrollDigits
+    
+    
+    mov   si,DirEntrySummary
+    call  Print
+    call  PutCrLf
+    call  PutCrLf
+    
+    popall
+    ret
+    
 
 
 
@@ -662,7 +741,7 @@ ProcessKeyBuffer:
     cmp   ah, DISK_OK
     je    .writeOK
     call  DiskPrintStatus       ; Print Drive status if error
-.writeOK
+.writeOK:
     jmp   .done
 
 .doBell:
@@ -1051,7 +1130,6 @@ DiskRead:
     mov cl, [chsSector]      ; sector 
     call Int13WithRetry
 
-.write_ok:
     pop cx
     pop dx
     ret
@@ -1215,8 +1293,29 @@ PromptString:        db "@: ",0
 ;
 ; File/Directory Stuff
 ;
-DirEntryBuffer:   times SIZE_DIR_ENTRY db 0
-CurrentSecNum:    dw 0
-RemainingSecs:    dw 0
+CurrentSecNum:       dw 0
+RemainingSecs:       dw 0
+HexDigits:           db "0123456789ABCDEF"
+
+
+SIZE_DIR_ENTRY_SUMMARY    EQU   32
+DirEntrySummary:          times SIZE_DIR_ENTRY_SUMMARY db 0
+DirEntryReal:
+istruc DirEntry
+    at DIR_Name,          db "           "
+    at DIR_Atrr,          db 0x00
+    at DIR_NTRes,         db 0x00
+    at DIR_CrtTimeTenth,  db 0x00
+    at DIR_CrtTime,       dw 0x0000
+    at DIR_CrtDate,       dw 0x0000
+    at DIR_LstAccDate,    dw 0x0000
+    at DIR_FstClusHi,     dw 0x0000
+    at DIR_WrtTime,       dw 0x0000
+    at DIR_WrtDate,       dw 0x0000
+    at DIR_FstClusLo,     dw 0x0000
+    at DIR_FileSize,      dd 0x00000000
+iend
+
+
 
 times (SIZE_SYSTEM * SIZE_SECTOR) - ($ - $$) db 0

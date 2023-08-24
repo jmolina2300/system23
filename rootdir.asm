@@ -12,20 +12,7 @@
 %include "equates.inc"
 
 
-struc   DirEntry
-    DIR_Name:          resb 11
-    DIR_Atrr:          resb 1
-    DIR_NTRes:         resb 1
-    DIR_CrtTimeTenth:  resb 1
-    DIR_CrtTime:       resw 1
-    DIR_CrtDate:       resw 1
-    DIR_LstAccDate:    resw 1
-    DIR_FstClusHi:     resw 1
-    DIR_WrtTime:       resw 1
-    DIR_WrtDate:       resw 1
-    DIR_FstClusLo:     resw 1
-    DIR_FileSize:      resd 1
-endstruc
+
 
 
 VolumeID:
