@@ -1,16 +1,6 @@
 %include "equates.inc"
-
-%macro  pushall 0
-    pusha
-    push  ds
-    push  es
-%endmacro
-
-%macro  popall 0
-    pop es
-    pop ds
-    popa
-%endmacro
+%include "macros.asm"
+%include "fatfs.inc"
 
 org 0x0000
 Begin:
@@ -89,7 +79,9 @@ Begin:
     call  ClearKeyBuffer
     jmp   .ReadLoop
 
-
+%include "console.asm"
+%include "graphics.asm"
+%include "disk.asm"
 
 
 Dir:
@@ -330,6 +322,8 @@ LoadExecutable:
     ret
 
 
+
+
 ;*****************************************************************************
 ; Print out drive parameters for a selected drive
 ;  
@@ -357,6 +351,8 @@ PutDriveParams:
     call PrintNumBase10
     call PutCrLf
 
+
+    
     ;---
     ; BIOS function 13/8 - Get drive parameters
     ;
@@ -426,191 +422,10 @@ PutDriveParams:
 
 
 
-;*****************************************************************************
-; VGA Clear - clears the vga buffer with a specified color
-;
-; AL = pixel color
-;
-;*****************************************************************************
-VgaClear:
-    pusha
-    push es
-
-    xor bx,bx
-    ; Load ES with the VGA memory segment
-    mov ax, VGA_MEMORY_SEG
-    mov es, ax
-    xor ax, ax
-    mov al, [PixelColor]    ; AL = pixel color
-.clear_loop:
-    mov [es:bx], al         ; vgamem[bx] = pixel
-    inc bx
-    cmp bx, 64000
-    jne .clear_loop
-    pop es
-    popa
-    ret
-
-
-;*****************************************************************************
-; VGA Test
-;
-;*****************************************************************************
-VgaTest:
-    pusha
-    mov al, 13h
-    mov ah, 0
-    int 10h
-
-
-    ; Set bg color
-    mov ah, 0x0B
-    mov bh, 0
-    mov bl, COLOR_BLUE
-    int 10h
-
-
-    mov bh, 0      ; page 0
-    mov al, COLOR_LIGHT_GREEN
-    xor si, si
-    xor di, di
-    xor bl, bl
-draw_loop:
-    mov cx, si     ; CX = cols
-    mov dx, di     ; DX = rows
-    call PutPixel
-
-
-    inc si
-    mov bl, byte [si]     ; BL = SI
-    and bl, 0x20
-    cmp bl, 0x20
-    jne .skip
-    inc di
-.skip:
-    cmp si, 500
-    jne draw_loop
-
-draw_loop2:
-    mov cx, si     ; CX = cols
-    mov dx, di     ; DX = rows
-    call PutPixel
-
-    dec si
-    mov bl, byte [si]     ; BL = SI
-    and bl, 0x20
-    cmp bl, 0x20
-    jne .skip
-    inc di
-.skip:
-    cmp si, 0
-    jne draw_loop2
-
-    xor ax,ax
-    int 16h
-
-    mov al, VGA_MODE_TEXT
-    mov ah, 0
-    int 10h
-    popa
-    ret
 
 
 
-;*****************************************************************************
-; Print a 0-terminated string
-;
-;*****************************************************************************
-Print:
-    push    ax
-    push	bx
-    push	cx
-    push	dx
-    push	di
-    push    si
 
-    mov ah, 0Eh
-    mov cx, 1
-.loop:
-    lodsb          ; AL = DS:SI
-    test al, al    ; AL == 0?
-    jz .done
-    int 10h
-    jmp .loop
-.done:
-
-    pop si
-    pop	di
-    pop	dx
-    pop	cx
-    pop	bx
-    pop ax
-    ret
-
-
-;*****************************************************************************
-; Print a 0-terminated string with a newline
-;
-;
-;*****************************************************************************
-Println:
-    call Print
-    push ax
-    mov ah, func_tty
-    mov al, ASCII_CR
-    int 10h
-    mov al, ASCII_LF
-    int 10h
-    pop ax
-    ret
-
-;*****************************************************************************
-; Putc
-;
-;   Input:  al = the character
-;*****************************************************************************
-Putc:
-    push ax
-    mov ah, 0x0E
-    int 10h
-    pop ax
-    ret
-
-;*****************************************************************************
-; Cls (clear screen)
-;
-;   Input: DH = number of rows
-;          DL = number of columns
-;          AH = BG color
-;          AL = FG color
-;*****************************************************************************
-Cls:
-    push cx
-    push bx
-    push ax
-
-    mov bh, ah   ; Set background color
-    shl bh, 4
-    add bh, al   ; Set foreground color
-    mov al, 0
-    mov ah, 6    ; Scroll function
-    dec dh       ; row and col numbers minus 1 since the numbers are 0-based
-    dec dl
-    xor ch, ch   ; upper row number = 0
-    xor cl, cl   ; left column = 0
-    int 10h
-
-    ; move cursor to the top left of the screen
-    xor bh,bh    ; BH = page 0
-    xor dh,dh    ; DH = row 0
-    xor dl,dl    ; DL = col 0
-    mov ah, 2    
-    int 10h
-
-    pop ax
-    pop bx
-    pop cx
-    ret
 
 
 ;*****************************************************************************
@@ -670,25 +485,7 @@ GetCurrentTime:
     ret
 
 
-;*****************************************************************************
-; Write Graphics Pixel
-;
-; AH = 0Ch
-; BH = page number
-; AL = pixel color
-;   if bit 7 set, value is XOR'ed onto screen except in 256-color modes
-; CX = column
-; DX = row
-;*****************************************************************************
-PutPixel:
-    push ax
-    push bx
-    mov bx, 0      ; page = 0
-    mov ah, 0x0C   ; write pixel
-    int 10h
-    pop bx
-    pop ax
-    ret
+
 
 
 ;*****************************************************************************
@@ -909,19 +706,6 @@ KeyBufferInsert:
 
 
 
-
-PutCrLf:
-    push ax
-    mov al, ASCII_CR
-    mov ah, func_tty
-    int 10h
-    mov al, ASCII_LF
-    int 10h
-    pop ax
-    ret
-
-
-
 ;*****************************************************************************
 ; Toggle between graphics or text mode
 ;
@@ -944,49 +728,6 @@ ToggleGraphics:
     int  10h
     pop  ax
     ret
-
-
-;*****************************************************************************
-; print a number in decimal (16-bit)
-;
-; AX = number to print
-;
-;*****************************************************************************
-PrintNumBase10:
-    push ax
-    push bx
-    push cx
-    push dx
-
-    mov bx, 10
-    xor cx, cx
-
-    ; Loop 1
-    ; Continuously divide the number by 10 and save the remainder on the stack
-    .loop:
-        xor dx, dx  ; DX = 0
-        div bx      ; (DX:AX)/BX  --> AX:DX
-        push dx     ; keep the remainder
-        inc cx
-        cmp ax, 0   ; AX = 0?
-        jne .loop
-
-    ; Loop 2
-    ; Pop the digit values off the stack and print them out, one by one.
-    .loop2:
-        pop dx
-        add dl, '0'
-        mov al, dl
-        mov ah, func_tty
-        int 10h
-        loop .loop2
-
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-
 
 
 
@@ -1057,198 +798,6 @@ WriteKeyBufferToDisk:
     ret
 
 
-;*****************************************************************************
-; Disk Write Sectors
-;  
-; Input:    AX = logical starting sector
-;           CX = number of sectors to write
-;        ES:BX = disk buffer pointer
-;
-;         Uses the CHS values stored at
-;           chsCylinder
-;           chsHead
-;           chsSector
-;
-; Output: AH = 0 if successful
-; 
-;*****************************************************************************
-DiskWrite:
-    push dx
-    push cx
-    
-    call LbaToChs
-
-    mov dl, [drvBoot]        ; Select the original boot drive
-    xor ax, ax
-    int 13h                  ; Reset disk, int 13/ah=0
-
-    mov ax, cx               ; al = number of sectors to write
-    mov ah, 3                ; Write sectors function
-    mov ch, [chsCylinder]    ; cylinder
-    mov dh, [chsHead]        ; head
-    mov cl, [chsSector]      ; sector 
-    call Int13WithRetry
-
-.write_ok:
-    pop cx
-    pop dx
-    ret
-
-
-
-
-;*****************************************************************************
-; Disk Read Sectors
-;  
-; Input:    AX = logical starting sector
-;           CX = number of sectors to read
-;        ES:BX = disk buffer pointer
-;         
-;        Uses the CHS values stored at
-;           chsCylinder
-;           chsHead
-;           chsSector
-;
-; Output: AH = 0 if successful
-; 
-;*****************************************************************************
-DiskRead:
-    push dx
-    push cx
-
-    
-    call LbaToChs            ; First, convert the LBA in AX to CHS
-
-    mov dl, [drvBoot]        ; Select the original boot drive
-    xor ax, ax
-    int 13h                  ; Reset disk
-
-    mov ax, cx               ; al = number of sectors to read
-    mov ah, 2                ; Read sectors function
-    mov ch, [chsCylinder]    ; cylinder
-    mov dh, [chsHead]        ; head
-    mov cl, [chsSector]      ; sector 
-    call Int13WithRetry
-
-    pop cx
-    pop dx
-    ret
-
-
-DiskPrintStatus:
-    push  ax
-    push  ds
-    push  si
-
-    mov   ah,1
-    int   13h
-    push  cs
-    pop   ds
-    mov   si, MsgDriveError
-    call  Print
-    and   ax, 0xFF
-    call  PrintNumBase10
-    call  PutCrLf
-
-    pop   si
-    pop   ds
-    pop   ax
-    ret
-
-
-
-;*****************************************************************************
-; INT 13 with 3 retries
-;
-; Input:   AH = function #
-;          AL = Number of sectors
-;          CH = Cylinder
-;          CL = Sector
-;          DH = Head
-;          DL = Drive
-;
-; Output:  CF = 0 if successful
-;               1 if error
-;*****************************************************************************
-Int13WithRetry:
-
-    push cx
-    push di
-    push si
-
-    mov  di,ax           ; save function call in di
-    mov  si,cx           ; save cylinder and sector in si
-    mov  cx,3            ; number of retries in cx
-    
-.do_int13:
-    push cx              ; Save loop counter
-    mov  cx,si           ; Restore ch=cylinder,cl=sector
-    int  13h             ; BIOS diskette service
-    pop  cx              ; Restore loop counter
-    jc   .time_out
-    jmp  .done
-
-.time_out: 
-    cmp    ah,DISK_TIMEOUT
-    je    .set_carry       ; If timeout error, don't retry
-    cmp    cx,0
-    je    .set_carry       ; If done all retries and CF=1, stop
-
-.disk_reset:
-    xor    ax,ax           ; ax = 0 for disk reset
-    int    13h             ; do reset
-    mov    ax,di           ; restore int13 arguments
-    loop .do_int13         ; retry int13
-
-.set_carry:
-    stc                    ; Set CF=1 to show error
-
-.done:
-    pop si
-    pop di
-    pop cx
-    ret
-
-
-
-;*****************************************************************************
-; LBA to CHS
-;
-; WARNING: Be sure to CLEAR DX before the call if the LBA is only 16 bits!
-;
-; Input:  DX:AX = logical block address (LBA)
-;
-;      
-; 
-;*****************************************************************************
-LbaToChs:
-    push bx
-    push ax
-    push dx
-    push ds
-    
-    push  cs
-    pop   ds                      ; Make sure DS=CS since all the labels are here
-    ;
-    ; let temp = AX
-    ;
-    div word [drvSecsPerTrack]    ; temp = lba / (sectorspertrack)
-    inc dl                        ; adjust for sector 
-    mov byte [chsSector], dl      ; sector = (lba % (sectorspertrack)) + 1
-    xor dx, dx 
-    ;
-    ;   Head will be in AX
-    ;   Remainder is in DX
-    ;
-    div word [drvHeads]
-    mov byte [chsHead], dl        ; head = temp % (numberofheads)
-    mov byte [chsCylinder], al    ; cylinder = temp / (numberofheads)
-
-    pop ds
-    pop dx
-    pop ax
-    pop bx
-    ret
 
 
 
@@ -1262,13 +811,6 @@ drvCylinders:        dw 0
 drvHeads:            dw 0
 
 
-chsCylinder:         dw 0
-chsHead:             dw 0
-chsSector:           db 0
-
-
-VgaMode:             db VGA_MODE_GRAPHICS
-PixelColor:          db COLOR_BLUE
 
 
 TestStructure:       db 41h, 42h, 43h, 44h,45h, 0

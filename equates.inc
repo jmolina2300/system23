@@ -70,20 +70,13 @@ FAT16_RootDirSecStart  EQU FAT16_RsvdSecCnt+(FAT16_FATsz16 * 2)
 ;*****************************************************************************
 ; Memory Locations
 ;*****************************************************************************
-VGA_MEMORY_SEG    EQU 0xA000
-
 SEG_BOOT          EQU 0x07C0
 SEG_SYSTEM        EQU 0x0050
 SEG_STACK         EQU 0x0800
-SEG_DISKBUFF      EQU 0x2000
+;SEG_DISKBUFF      EQU 0x2000
+SEG_DISKBUFF      EQU SEG_SYSTEM + (SIZE_SYSTEM * 0x0020)
 
 
-
-
-
-; Disk error codes
-DISK_OK          EQU 0
-DISK_TIMEOUT     EQU 0x80
 
 
 ASCII_BELL       EQU 0x7
@@ -102,17 +95,13 @@ func_writechar EQU 0x09
 
 
 ; BIOS scan codes for keyboard
-KEY_RETURN    EQU 0x1C0D
-KEY_BACKSPACE EQU 0x0E08
-KEY_TAB       EQU 0x0F09
-KEY_INS       EQU 0x5200
-KEY_ESC       EQU 0x011B
+KEY_RETURN     EQU 0x1C0D
+KEY_BACKSPACE  EQU 0x0E08
+KEY_TAB        EQU 0x0F09
+KEY_INS        EQU 0x5200
+KEY_ESC        EQU 0x011B
 
 KEY_BUFFER_SIZE    EQU 80
-
-
-VGA_MODE_GRAPHICS  EQU 13h
-VGA_MODE_TEXT      EQU 03h
 
 
 
@@ -120,17 +109,3 @@ CLI_LIMIT_LEFT     EQU 0
 CLI_LIMIT_RIGHT    EQU 80
 
 
-struc   DirEntry
-    DIR_Name:          resb 11
-    DIR_Atrr:          resb 1
-    DIR_NTRes:         resb 1
-    DIR_CrtTimeTenth:  resb 1
-    DIR_CrtTime:       resw 1
-    DIR_CrtDate:       resw 1
-    DIR_LstAccDate:    resw 1
-    DIR_FstClusHi:     resw 1
-    DIR_WrtTime:       resw 1
-    DIR_WrtDate:       resw 1
-    DIR_FstClusLo:     resw 1
-    DIR_FileSize:      resd 1
-endstruc
