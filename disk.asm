@@ -215,8 +215,7 @@ LbaToChs:
 ;
 ;*****************************************************************************
 GetDriveParams:
-    pushall
-
+    push dx
     
     ;---
     ; BIOS function 13/8 - Get drive parameters
@@ -237,36 +236,37 @@ GetDriveParams:
     int  13h
     jc   .error
 
-    push cx             ; save CL=SecsPerTrack
+    push cx                     ; save CL=SecsPerTrack
 
-    ;---
-    ; The 10-bit number of cylinders is stored in both CH and CL:
-    ;           LLLLLLLL HHxxxxxx
-    ;               ch       cl
-    ;
-    ; to print the number, we need to store the following in AX:
-    ;  
-    ;      AX = 000000HH LLLLLLLL
-    ;
-    ;---
     xor  ax, ax
     add  al, ch 
     and  cx, 0b11000000
     shl  cx, 2
     add  ax, cx                 ; AX = CH + ((CL & 0xC0) << 2)
     inc  ax                     ; AX = Cylinders    
+    mov  [drvCylinders],ax
 
     shr  dx,8
     inc  dx
     mov  cx,dx                  ; CX = Heads
+    mov  [drvHeads],cx
 
     pop  bx                     ; restore CL=SecsPerTrack
     and  bx, 0x3f
+    mov  [drvSecsPerTrack],bx
 
 .error:
+    pop dx
 
-    popall
     ret
+
+;
+; Cached Drive parameters
+;
+drvSecsPerTrack:     db 0
+drvCylinders:        dw 0
+drvHeads:            dw 0
+
 
 chsCylinder:         dw 0
 chsHead:             dw 0

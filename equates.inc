@@ -49,23 +49,42 @@ SIZE_SYSTEM            EQU 5    ; in sectors
 
 
 ;*****************************************************************************
-; FAT16 BPB values
+; Define FAT version here
 ;*****************************************************************************
-FAT16_BytesPerSec      EQU 512
-FAT16_SecPerClus       EQU 2
-FAT16_RsvdSecCnt       EQU 1+SIZE_SYSTEM
-FAT16_NumFATs          EQU 2
-FAT16_RootEntCnt       EQU 512
-FAT16_TotSec16         EQU 20480
-FAT16_Media            EQU 0xF8
-FAT16_FATsz16          EQU 20
-FAT16_SecPerTrk        EQU 32
-FAT16_NumHeads         EQU 2
-FAT16_HiddSec          EQU 0
-FAT16_TotSec32         EQU 0
-FAT16_DrvNum           EQU 0x80
+%define __FAT12__
+%ifdef __FAT16__
+    FAT_BytesPerSec      EQU 512
+    FAT_SecPerClus       EQU 2
+    FAT_RsvdSecCnt       EQU 1+SIZE_SYSTEM
+    FAT_NumFATs          EQU 2
+    FAT_RootEntCnt       EQU 512
+    FAT_TotSec16         EQU 20480
+    FAT_Media            EQU 0xF8
+    FAT_FATsz16          EQU 20
+    FAT_SecPerTrk        EQU 32
+    FAT_NumHeads         EQU 2
+    FAT_HiddSec          EQU 0
+    FAT_TotSec32         EQU 0
+    FAT_DrvNum           EQU 0x80
+%elifdef __FAT12__
+    FAT_BytesPerSec      EQU 512
+    FAT_SecPerClus       EQU 1
+    FAT_RsvdSecCnt       EQU 1+SIZE_SYSTEM
+    FAT_NumFATs          EQU 2
+    FAT_RootEntCnt       EQU 224
+    FAT_TotSec16         EQU 2880
+    FAT_Media            EQU 0xF0
+    FAT_FATsz16          EQU 9
+    FAT_SecPerTrk        EQU 18
+    FAT_NumHeads         EQU 2
+    FAT_HiddSec          EQU 0
+    FAT_TotSec32         EQU 0
+    FAT_DrvNum           EQU 0x80
+%endif
 
-FAT16_RootDirSecStart  EQU FAT16_RsvdSecCnt+(FAT16_FATsz16 * 2)
+FAT_RootDirSecStart  EQU FAT_RsvdSecCnt+(FAT_FATsz16 * 2)
+
+
 
 ;*****************************************************************************
 ; Memory Locations
@@ -74,7 +93,7 @@ SEG_BOOT          EQU 0x07C0
 SEG_SYSTEM        EQU 0x0050
 SEG_STACK         EQU 0x0800
 ;SEG_DISKBUFF      EQU 0x2000
-SEG_DISKBUFF      EQU SEG_SYSTEM + (SIZE_SYSTEM * 0x0020)
+SEG_DISKBUFF      EQU ((SEG_SYSTEM << 4) + (SIZE_SYSTEM * SIZE_SECTOR)) >>4
 
 
 

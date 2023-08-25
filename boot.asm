@@ -4,51 +4,27 @@
 org 7C00h
     jmp start
     nop
-;=============================================================================
-;     Begin BPB
+
 BS_OEMName:          db "JOM     "
-BPB_BytesPerSec:     dw FAT16_BytesPerSec
-BPB_SecPerClus:      db FAT16_SecPerClus
-BPB_RsvdSecCnt:      dw FAT16_RsvdSecCnt
-BPB_NumFATs:         db FAT16_NumFATs
-BPB_RootEntCnt:      dw FAT16_RootEntCnt
-BPB_TotSec16:        dw FAT16_TotSec16
-BPB_Media:           db FAT16_Media
-BPB_FATsz16:         dw FAT16_FATsz16
-BPB_SecPerTrk:       dw FAT16_SecPerTrk
-BPB_NumHeads:        dw FAT16_NumHeads
-BPB_HiddSec:         dd FAT16_HiddSec
-BPB_TotSec32:        dd FAT16_TotSec32
-BS_DrvNum:           db FAT16_DrvNum
+BPB_BytesPerSec:     dw FAT_BytesPerSec
+BPB_SecPerClus:      db FAT_SecPerClus
+BPB_RsvdSecCnt:      dw FAT_RsvdSecCnt
+BPB_NumFATs:         db FAT_NumFATs
+BPB_RootEntCnt:      dw FAT_RootEntCnt
+BPB_TotSec16:        dw FAT_TotSec16
+BPB_Media:           db FAT_Media
+BPB_FATsz16:         dw FAT_FATsz16
+BPB_SecPerTrk:       dw FAT_SecPerTrk
+BPB_NumHeads:        dw FAT_NumHeads
+BPB_HiddSec:         dd FAT_HiddSec
+BPB_TotSec32:        dd FAT_TotSec32
+BS_DrvNum:           db FAT_DrvNum
 BS_Reserved1:        db 0
 BS_BootSig:          db 0x29
 BS_VolID:            dd 0xDEADCAFE
 BS_VolLab:           db "SYSTEM23   "
 BS_FilSysType:       db "FAT16   "
-;=============================================================================
-;     End BPB
 
-;=============================================================================
-; FAT12 BPB
-; BS_OEMName:          db "JOM     "
-; BPB_BytesPerSec:     dw 512
-; BPB_SecPerClus:      db 1
-; BPB_RsvdSecCnt:      dw 1+SIZE_SYSTEM
-; BPB_NumFATs:         db 2
-; BPB_RootEntCnt:      dw 224
-; BPB_TotSec16:        dw 2880
-; BPB_Media:           db 0xF0
-; BPB_FATsz16:         dw 9
-; BPB_SecPerTrk:       dw 18
-; BPB_NumHeads:        dw 2
-; BPB_HiddSec:         dd 0
-; BPB_TotSec32:        dd 0
-; BS_DrvNum:           db 0
-; BS_Reserved1:        db 0
-; BS_BootSig:          db 0x29
-; BS_VolID:            dd 0xDEADCAFE
-; BS_VolLab:           db "SYSTEM23   "
-; BS_FilSysType:       db "FAT12   "
 
 start:
     cli

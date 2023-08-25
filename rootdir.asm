@@ -35,5 +35,5 @@ VolumeID:
 ;
 ; Fill the remaining directory entries with 0
 ;
-times (FAT16_RootEntCnt - 1) * SIZE_DIR_ENTRY db 0
+times (FAT_RootEntCnt - 1) * SIZE_DIR_ENTRY db 0
 

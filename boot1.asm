@@ -17,7 +17,7 @@ Begin:
 
     mov   ah, COLOR_BLACK
     mov   al, COLOR_LIGHT_GREY
-    mov   dh, 25         ; 20 rows
+    mov   dh, 25         ; 25 rows
     mov   dl, 80         ; 80 columns
     call  Cls            ; Clear them all...
 
@@ -66,7 +66,10 @@ Begin:
     dec   cx
     test  cx,cx
     jnz   .DrawLine
-    call  PutCrLf    
+    call  PutCrLf
+
+    mov ax,SEG_DISKBUFF
+    call PrintNumBase10
 
 
 
@@ -96,13 +99,13 @@ Dir:
     ;----
     ; Save the number of sectors to read
     ;----
-    mov  word [cs:RemainingSecs], (FAT16_RootEntCnt * 32) /  SIZE_SECTOR
+    mov  word [cs:RemainingSecs], (FAT_RootEntCnt * 32) /  SIZE_SECTOR
     
 
     ;----
     ; Store the starting sector of the Root Dir
     ;----
-    mov   word [cs:CurrentSecNum], FAT16_RootDirSecStart
+    mov   word [cs:CurrentSecNum], FAT_RootDirSecStart
 .nextDiskChunk:
 
     xor   dx,dx
@@ -331,90 +334,45 @@ LoadExecutable:
 ;
 ;  AL = drive number
 ;
-; Parameters are stored in the following memory locations:
-;
-;  drvCylinders
-;  drvSecsPerTrack
-;  drvHeads
-;
 ;*****************************************************************************
 PutDriveParams:
     pushall
 
-    push ax
-    mov  si, MsgDriveParams
-    call Print
-    call PutCrLf
+    and   ax,0xff                ; drive number in the lower 8 bits
+    mov   si, MsgDriveParams
+    call  Print
+    call  PutCrLf
 
-    mov si, MsgDriveParams1
-    call Print
-    call PrintNumBase10
-    call PutCrLf
-
-
+    mov   si, MsgDriveParams1
+    call  Print
     
-    ;---
-    ; BIOS function 13/8 - Get drive parameters
-    ;
-    ; Input: 
-    ; DL = Drive Number
-    ;
-    ; Return:
-    ; CH = Cylinders 
-    ; CL = SecsPerTrack
-    ; DH = Sides/Heads
-    ; DL = drives attached 
-    ;
-    ;---
-    pop dx
-    mov ah, 0x8 
-    int 13h
-    jc .error
+    call  PrintNumBase10
+    call  PutCrLf
 
-    push cx             ; save CL=SecsPerTrack
-    push dx             ; save DH=Sides
+    call  GetDriveParams
 
-    ;---
-    ; The 10-bit number of cylinders is stored in both CH and CL:
-    ;           LLLLLLLL HHxxxxxx
-    ;               ch       cl
-    ;
-    ; to print the number, we need to store the following in AX:
-    ;  
-    ;      AX = 000000HH LLLLLLLL
-    ;
-    ;---
-    xor ax, ax
-    add al, ch 
-    and cx, 0b11000000
-    shl cx, 2
-    add ax, cx                 ; AX = CH + ((CL & 0xC0) << 2)
-    inc ax
-    mov [drvCylinders], ax
-    mov si, MsgDriveParams2    ; 1 Number of cylinders
-    call Print
-    call PrintNumBase10
-    call PutCrLf
+    ; AX = cylinders
+    ; BX = secspertrack
+    ; CX = heads
+    mov   si, MsgDriveParams2     ; 1. AX = Number of cylinders
+    call  Print
+    call  PrintNumBase10
+    call  PutCrLf
 
-    mov si, MsgDriveParams3    ; 2 Number of sides/heads (0-based)
-    call Print
-    pop ax                     ; restore DH=sides
-    shr ax, 8
-    inc ax
-    mov [drvHeads], ax
-    call PrintNumBase10
-    call PutCrLf
+    mov   ax,cx
+    mov   si, MsgDriveParams3     ; 2. CX = Number of sides/heads
+    call  Print
+    call  PrintNumBase10
+    call  PutCrLf
 
-    mov si, MsgDriveParams4    ; 3 Sectors per track
-    call Print
-    pop ax                     ; restore CL=SecsPerTrack
-    and ax, 0x3f
-    mov [drvSecsPerTrack], ax
-    call PrintNumBase10
-    call PutCrLf
+    mov   ax,bx
+    mov   si, MsgDriveParams4     ; 3. BX = Sectors per track
+    call  Print
+    call  PrintNumBase10
+    call  PutCrLf
 
 .error:
-    call PutCrLf
+    call  PutCrLf
 
     popall
     ret
@@ -782,7 +740,7 @@ WriteKeyBufferToDisk:
     mov es, ax
     mov bx, 0
 
-    ; Write the buffer to LBA 36, where the file data is located
+    ; Write the buffer to LBA where the file data is located
     ;   FAT12, LBA = 36
     ;   FAT16, LBA = 78
 
@@ -790,7 +748,7 @@ WriteKeyBufferToDisk:
     mov ax, 78        ; Start at sector 78
     mov cx, 1         ; Write 1 sector
     call DiskWrite
-                    ; Leave status code in AX register
+                      ; Leave status code in AX register
     
 
     pop es 
@@ -806,15 +764,9 @@ kbd_buffer_idx:                        db 0
 
 
 drvBoot:             db 0
-drvSecsPerTrack:     db 0
-drvCylinders:        dw 0
-drvHeads:            dw 0
-
-
 
 
 TestStructure:       db 41h, 42h, 43h, 44h,45h, 0
-
 MsgTime:             db "RTC Time: ", 0
 MsgMemorySize:       db "Lower memory available: ", 0
 MsgDriveParams:      db "Boot drive geometry ",0
