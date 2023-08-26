@@ -3,7 +3,7 @@
 %include "fatfs.inc"
 
 org 0x0000
-Begin:
+Main:
     ; First, make sure DS = CS = ES
     ;
     mov   ax, SEG_SYSTEM
@@ -20,58 +20,7 @@ Begin:
     mov   dh, 25         ; 25 rows
     mov   dl, 80         ; 80 columns
     call  Cls            ; Clear them all...
-
-    mov   si, MsgWelcome
-    call  Print
- 
-    call  PutCrLf
-    call  PutCrLf
-    mov   ah, func_tty
-    mov   al, ASCII_BELL
-    int   10h
-    
-    mov   si, MsgMemorySize
-    call  Print
-
-    ; Get lower memory size
-    ;   AX will be the number of total kilobytes available
-    int   0x12            
-    call  PrintNumBase10
-    mov   al, 'K'
-    call  Putc
-    call  PutCrLf
-
-    ; Print the RTC time
-    ;
-    mov   si, MsgTime
-    call  Print
-    mov   si, TimeString
-    call  GetCurrentTime
-    call  Print
-    call  PutCrLf
-    call  PutCrLf
-
-    ; Print drive parameters
-    ;
-    mov   ax, [drvBoot]
-    call  PutDriveParams
-
-
-    ; Draw a nice line to finish off this section
-    ;
-    mov   al, '='
-    mov   cx, CLI_LIMIT_RIGHT
-.DrawLine:
-    call  Putc
-    dec   cx
-    test  cx,cx
-    jnz   .DrawLine
-    call  PutCrLf
-
-    mov ax,SEG_DISKBUFF
-    call PrintNumBase10
-
-
+    call  PrintSystemSummary
 
     
 .ReadLoop:
@@ -85,6 +34,132 @@ Begin:
 %include "console.asm"
 %include "graphics.asm"
 %include "disk.asm"
+
+
+
+
+
+PrintSystemSummary:
+    pushall
+
+    ; Welcome
+    ;=================================================
+    mov   si, MsgWelcome
+    call  Print
+    call  PutCrLf
+    call  PutCrLf
+    mov   al, ASCII_BELL
+    call  Putc
+
+    ; Get lower memory size (int 0x12)
+    ;   AX = number of total kilobytes available
+    ;=================================================
+    mov   si, MsgMemorySize
+    call  Print
+    int   0x12
+    call  PrintNumBase10
+    mov   al, 'K'
+    call  Putc
+    call  PutCrLf
+
+    ; Print Segment locations
+    ;=================================================
+    call PrintSegmentLocations
+    call PutCrLf
+
+
+    ; Print the RTC time
+    ;=================================================
+    mov   si, MsgTime
+    call  Print
+    mov   si, TimeString
+    call  GetCurrentTime
+    call  Print
+    call  PutCrLf
+    call  PutCrLf
+
+
+    ; Print drive parameters
+    ;=================================================
+    mov   ax, [drvBoot]
+    call  PutDriveParams
+
+
+    ; Draw a nice line to finish off this section
+    ;=================================================
+    mov   al, '='
+    mov   cx, CLI_LIMIT_RIGHT
+.DrawLine:
+    call  Putc
+    loop  .DrawLine
+    call  PutCrLf
+
+    popall
+    ret
+
+
+PrintSegmentLocations:
+    pushall
+
+    ; Print the Code, Data, and Stack addresses
+    ;
+    push di               ; Save SI for later
+    push si               ; Save DI for later
+
+    mov  ax,4
+    call PutIndent
+    mov  si,MsgCode
+    call Print
+    push cs
+    pop  ax
+    call PrintNumBase16   ; CS
+    mov  al,':'
+    call Putc
+    mov  ax,Main
+    call PrintNumBase16
+    call PutCrLf
+
+    mov  ax,4
+    call PutIndent
+    mov  si,MsgDataSrc
+    call Print
+    push ds
+    pop  ax
+    call PrintNumBase16   ; DS (SI)
+    mov  al,':'
+    call Putc
+    pop  ax               ; Restore SI
+    call PrintNumBase16
+    call PutCrLf
+
+    mov  ax,4
+    call PutIndent
+    mov  si,MsgDataSrc
+    call Print
+    push ds
+    pop  ax
+    call PrintNumBase16   ; DS (DI)
+    mov  al,':'
+    call Putc
+    pop  ax               ; Restore DI
+    call PrintNumBase16
+    call PutCrLf
+
+    mov  ax,4
+    call PutIndent
+    mov  si,MsgStack
+    call Print
+    push ss
+    pop  ax
+    call PrintNumBase16   ; SS
+    mov  al,':'
+    call Putc
+    push sp
+    pop  ax
+    call PrintNumBase16
+    call PutCrLf
+    popall
+    ret
 
 
 Dir:
@@ -578,7 +653,7 @@ GetLine:
 .k3:
     xor   bx, bx
     mov   bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
-    cmp   bl, KEY_BUFFER_SIZE
+    cmp   bl, SIZE_KEY_BUFFER
     je    .getKey               ; kbd_buffer_idx == kbd_buffer_size?
 
 
@@ -613,7 +688,7 @@ ClearKeyBuffer:
     push di
 
     mov byte [kbd_buffer_idx], 0   ; Reset keyboard buffer index
-    mov cx, KEY_BUFFER_SIZE
+    mov cx, SIZE_KEY_BUFFER
 
     mov di, kbd_buffer
     mov al, ' '                    ; Fill with spaces
@@ -709,7 +784,7 @@ CopyKeyBufferToDiskBuffer:
     push cs
     pop  ds            ; DS = CS
 
-    mov  cx, KEY_BUFFER_SIZE
+    mov  cx, SIZE_KEY_BUFFER
     lea  si, kbd_buffer
 
     rep  movsb         ; copy byte from ds:[si] to es:[di] until cx=0
@@ -759,7 +834,7 @@ WriteKeyBufferToDisk:
 
 
 
-kbd_buffer:     times KEY_BUFFER_SIZE  db 0
+kbd_buffer:     times SIZE_KEY_BUFFER  db 0
 kbd_buffer_idx:                        db 0
 
 
@@ -780,7 +855,11 @@ MsgDriveError:       db "Drive status: ",0
 MsgDriveWrite:       db "Writing to disk...", 0
 MsgWelcome:          db "Welcome to System23!", 0
 
-TimeString:          db "  :  :  ",0
+MsgStack:            db " stack ",0
+MsgDataSrc:          db "  data ",0
+MsgCode:             db "  code ",0
+
+TimeString:          db "00:00:00",0
 
 PromptString:        db "@: ",0
 

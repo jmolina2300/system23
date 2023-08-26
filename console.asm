@@ -13,6 +13,23 @@ PutCrLf:
     ret
 
 ;*****************************************************************************
+; Put an indent of specified length (MAX: 255)
+;
+; Input:  AL = Count of spaces to indent by
+;
+;*****************************************************************************
+PutIndent:
+    push  ax
+    and   ax,0x00FF
+    mov   cx,ax
+.space:
+    mov   al,' '
+    call  Putc
+    loop  .space
+    pop   ax
+    ret
+
+;*****************************************************************************
 ; print a number in decimal (16-bit)
 ;
 ; AX = number to print
@@ -53,6 +70,67 @@ PrintNumBase10:
     pop ax
     ret
 
+
+
+;*****************************************************************************
+; print a 16-bit number in hexadecimal
+;
+; Input:  AX = number to print
+;*****************************************************************************
+PrintNumBase16:
+    push   ax
+    push   bx
+    push   cx
+    push   dx
+    push   si
+    push   ds
+
+    push   cs    ; DS = CS
+    pop    ds
+
+    mov    cx,4   ; CX = 4 digits
+    mov    si,HexDigit
+.getdigits:
+    mov    bx,ax  ; BX = AX
+    and    bx, 0x000F
+    mov    dl, [si + bx]
+    and    dx, 0x00FF
+    push   dx
+    shr    ax,4
+    loop   .getdigits
+
+
+    ; Put the prefix
+    mov    ah, func_tty
+    mov    si, HexPrefix
+    mov    cx, 2
+.putprefix:
+    lodsb
+    int    10h
+    loop   .putprefix
+
+    mov    cx,4
+.putdigits:
+    pop    ax
+    mov    ah, func_tty
+    int    10h
+    loop   .putdigits
+
+    
+
+
+
+    pop ds
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+HexPrefix: db "0x"
+HexDigit:  db "0123456789ABCDEF"
+
 ;*****************************************************************************
 ; Print a 0-terminated string
 ;
@@ -75,12 +153,12 @@ Print:
     jmp .loop
 .done:
 
-    pop si
-    pop	di
-    pop	dx
-    pop	cx
-    pop	bx
-    pop ax
+    pop    si
+    pop	   di
+    pop	   dx
+    pop	   cx
+    pop	   bx
+    pop    ax
     ret
 
 
