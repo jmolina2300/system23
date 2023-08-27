@@ -4,7 +4,7 @@
 #-
 CC = gcc
 ASM = nasm
-FATVER = 16
+FATVER = 12
 
 ifeq ($(FATVER),12)
 	DISK_CAPACITY = 1474560

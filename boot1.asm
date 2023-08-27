@@ -1,7 +1,7 @@
 %include "equates.inc"
 %include "macros.asm"
 %include "fatfs.inc"
-
+bits 16
 org 0x0000
 Main:
     ; First, make sure DS = CS = ES
@@ -22,6 +22,10 @@ Main:
     call  Cls            ; Clear them all...
     call  PrintSystemSummary
 
+
+ 
+
+
     
 .ReadLoop:
     mov   si,PromptString
@@ -34,6 +38,7 @@ Main:
 %include "console.asm"
 %include "graphics.asm"
 %include "disk.asm"
+%include "string.asm"
 
 
 
@@ -158,30 +163,40 @@ PrintSegmentLocations:
     pop  ax
     call PrintNumBase16
     call PutCrLf
+
+    mov  ax,4
+    call PutIndent
+    mov  si,MsgDiskSegment
+    call Print
+    mov  ax,SEG_DISKBUFF
+    call PrintNumBase16   ; DISKBUFFER
+    mov  al,':'
+    call Putc
+    mov  ax,bx
+    call PrintNumBase16
+    call PutCrLf
+
     popall
     ret
 
 
 Dir:
     pushall
-
-    mov   ax, SEG_DISKBUFF
-    mov   es, ax
-    mov   bx, 0              ; ES:BX = diskbuff location
-    mov   si, 0              ; DS:SI = diskbuff location too
-      
     
     ;----
     ; Save the number of sectors to read
     ;----
-    mov  word [cs:RemainingSecs], (FAT_RootEntCnt * 32) /  SIZE_SECTOR
+    mov   word [cs:RemainingSecs], (FAT_RootEntCnt * 32) /  SIZE_SECTOR
     
-
     ;----
     ; Store the starting sector of the Root Dir
     ;----
     mov   word [cs:CurrentSecNum], FAT_RootDirSecStart
 .nextDiskChunk:
+    push  SEG_DISKBUFF
+    pop   es
+    mov   bx, 0                  ; ES:BX = beginning of diskbuffer
+    mov   si, 0
 
     xor   dx,dx
     mov   ax,[cs:CurrentSecNum]  ; Set current sector num
@@ -199,27 +214,31 @@ Dir:
     mov   cx,[cs:RemainingSecs]    ; Increment CurrentSecNum by count of sectors we read
     sub   cx,SIZE_DISKBUFFER       ; Decrement RemainingSecs by count of sectors we read
     jz    .endOfDirectory          ; If RemainingSecs == 0, then we are done
-    mov   [cs:RemainingSecs],cx    ;   Otherwise, save RemainingSecs count
+    mov   [cs:RemainingSecs],cx    ;  Otherwise, save RemainingSecs count
 
 
-    push  es
-    pop   ds
-    mov   si,0     ; Reset SI to beginning of segment
 .readEntry:
-
-    cmp   byte [si], 0
+    push  es
+    pop   ds        ; DS = DiskBuffer Segment
+    mov   si,bx     ; SI = RootDirectory[bx]
+   
+    cmp   byte [si], DIR_ALL_FREE
     je    .endOfDirectory
-    cmp   byte [si], 0xE5
+    cmp   byte [si], DIR_FREE
     je    .nextEntry
+    ;cmp   byte [si + OFFSET_DIR_Attr], ATTR_ARCHIVE
+    ;jne   .nextEntry
+    
+    call  DirEntryPrint
 
-    call  DirEntryRead
+
 .nextEntry:
-    add   si,32
+    add   bx,32
     ;----
     ; Check if we reached the end of the disk buffer
     ; If so, read another 2 blocks
     ;----
-    cmp   si, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
+    cmp   bx, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
     je    .nextDiskChunk
     jmp   .readEntry
 
@@ -229,53 +248,6 @@ Dir:
     popall
     ret
 
-
-
-;*****************************************************************************
-; Dir Read Entry
-;
-; Description:
-;
-;   Reads the information out of a dir entry and puts it in a buffer to be
-;   printed out afterwards
-;
-; Input:   DS:SI = pointer to dir entry
-;
-; Output:  ES:DI = buffer with information
-; 
-;*****************************************************************************
-DirEntryRead:
-    ;----
-    ; Read first 11 bytes for file name
-    ; If first byte is one of the markers (0xE5, 0x00, etc) skip it.
-    ;----
-    pushall
-
-    ;----
-    ; Set up output buffer to receive the file information
-    ;----
-    push  cs
-    pop   es
-    mov   di, DirEntryReal
-
-    ;----
-    ; Read in one 32-byte entry
-    ;----
-    mov   cx, SIZE_DIR_ENTRY
-    rep   movsb
-
-    
-    ;----
-    ; Print out whatever is inside the buffer
-    ;----
-    push  cs
-    pop   ds
-    mov   si, DirEntryReal
-    call  DirEntryPrint
-
-    popall
-    ret
-    
 
 
 
@@ -289,7 +261,7 @@ DirEntryRead:
 ;
 ; Input:    
 ;  
-;   DS:SI = real Directory Entry
+;   DS:SI = 32-byte DirEntry structure
 ;
 ; Output:
 ;
@@ -308,8 +280,10 @@ DirEntryPrint:
     mov   al,' '
     stosb
     
+    push  si
     mov   cx, 11             ; 11 bytes for the name
     rep   movsb              ; copy it over to DirEntrySummary
+    pop   si
     
     mov   ax, ' '
     stosb
@@ -329,8 +303,7 @@ DirEntryPrint:
     stosb
 .putSizeInHex:               ; Print the file size in bytes (in hex for now)
     mov   cx,4               ; CX = Number of 4-bit shifts to perform
-    mov   si,DirEntryReal+DIR_FileSize
-    mov   ax,word [si]
+    mov   ax,word [ds:si + OFFSET_DIR_FileSize]
 .rightShift: 
     push  ax
     shr   ax,4
@@ -341,16 +314,18 @@ DirEntryPrint:
 .unrollDigits:
     pop   bx
     and   bx,0x000F
-    mov   al, byte [HexDigits + bx]
+    mov   al, byte [cs:HexDigits + bx]
     stosb
-    dec   cx
-    jnz   .unrollDigits
+    loop  .unrollDigits
     
-    
+    push  ds                ; Save DS
+    push  es
+    pop   ds
     mov   si,DirEntrySummary
     call  Print
     call  PutCrLf
     call  PutCrLf
+    pop   ds                ; Restore DS
     
     popall
     ret
@@ -363,13 +338,11 @@ DirEntryPrint:
 ; 
 ; Description:
 ;
-;   Loads 128-sector executables into memory.
+;   Loads executables by name
 ;
 ; Input:  
 ;
-;      AX = Start sector of the executable on disk
-;   ES:BX = Location in memory where to load
-;
+;      DS:SI = executable name
 ;
 ; Output:
 ;
@@ -378,25 +351,106 @@ DirEntryPrint:
 ;
 ;*****************************************************************************
 LoadExecutable:
-    push  cx
-    push  dx
+    pushall
 
-    mov   ax, SEG_DISKBUFF
-    mov   es, ax
-    mov   bx, 100h
+    push  ds
+    pop   ax
+    mov  [cs:SavedSegment],ax   ; Save DS
 
+    
+    ;----
+    ; Save the number of sectors to read
+    ;----
+    mov   word [cs:RemainingSecs], (FAT_RootEntCnt * 32) /  SIZE_SECTOR
+    mov   word [cs:CurrentSecNum], FAT_RootDirSecStart
+.nextDiskChunk:
+
+    push  SEG_DISKBUFF
+    pop   es
+    mov   bx, 0                  ; ES:BX = beginning of diskbuffer
 
     xor   dx,dx
-    mov   ax, 78
-    mov   cx, 128
-    call  DiskRead
+    mov   ax,[cs:CurrentSecNum]     ; Set current sector num
+    mov   cx,SIZE_DISKBUFFER     ; Set number of sectors to read
+    call  DiskRead               ; Do Disk Read
     cmp   ah, DISK_OK
-    je    .LoadSuccess
+    je    .readOK
+    call  DiskPrintStatus
+    jmp   .endOfDirectory
+    
+
+.readOK:
+
+    add   word [cs:CurrentSecNum], SIZE_DISKBUFFER 
+    mov   cx,[cs:RemainingSecs]    ; Increment CurrentSecNum by count of sectors we read
+    sub   cx,SIZE_DISKBUFFER       ; Decrement RemainingSecs by count of sectors we read
+    jz    .endOfDirectory          ; If RemainingSecs == 0, then we are done
+    mov   [cs:RemainingSecs],cx    ;  Otherwise, save RemainingSecs count
 
 
-.LoadSuccess:
-    pop   dx
-    pop   cx
+.readEntry:
+
+   
+    cmp   byte [es:bx], DIR_ALL_FREE
+    je    .endOfDirectory
+    cmp   byte [es:bx], DIR_FREE
+    je    .nextEntry
+    cmp   byte [es:bx + OFFSET_DIR_Attr], ATTR_ARCHIVE
+    jne   .nextEntry
+    
+
+
+    ;-----------------------------------------------
+    ; Now,  SI = file we are looking for
+    ;       DI = current DIR_Name field
+    ;
+    ;-----------------------------------------------
+    mov   ax,[cs:SavedSegment]
+    push  ax
+    pop   ds
+
+    mov   di,bx
+    call  StrCompareFilename
+    cmp   ax,1
+    jne   .nextEntry
+
+
+    push  cs
+    pop   ds
+    mov   si,MsgFileFound
+    call  Println
+
+    call  Execute
+    jmp   .end
+
+
+
+.nextEntry:
+    add   bx,32
+    ;----
+    ; Check if we reached the end of the disk buffer
+    ; If so, read another 2 blocks
+    ;----
+    cmp   bx, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
+    je    .nextDiskChunk
+    jmp   .readEntry
+
+
+.endOfDirectory:
+    push  cs
+    pop   ds
+    mov   si,MsgFileNotFound
+    call  Println
+
+.end:
+    popall
+    ret
+SavedSegment:  dw 0
+
+
+
+Execute:
+
     ret
 
 
@@ -421,7 +475,7 @@ PutDriveParams:
     mov   si, MsgDriveParams1
     call  Print
     
-    call  PrintNumBase10
+    call  PrintNumBase16
     call  PutCrLf
 
     call  GetDriveParams
@@ -527,6 +581,7 @@ GetCurrentTime:
 ;*****************************************************************************
 ProcessKeyBuffer:
     pusha
+    push es
 
     mov si, kbd_buffer
     lodsb
@@ -560,8 +615,20 @@ ProcessKeyBuffer:
 
 .command4:
     cmp al, 'd'
-    jne  .badCommand
+    jne  .command5
     jmp  .doDir
+
+.command5:
+    cmp   al,'l'     ; SI = "ld program"
+    jne  .badCommand
+    lodsb 
+    cmp   al,'d'     ; SI = "d program"
+    jne  .badCommand
+    lodsb 
+    cmp   al,' '     ; SI = " program"
+    jne  .badCommand
+
+    jmp  .doLoad
 
 
 .doWrite:
@@ -587,12 +654,19 @@ ProcessKeyBuffer:
     call Dir
     jmp .done
 
+.doLoad:
+
+    call LoadExecutable  ; LoadExecutable(ds:si)
+    jmp .done
+
+
 .badCommand:
     mov   si, MsgError
     call  Println
 
 .done:
 
+    pop es
     popa
     ret
 
@@ -633,7 +707,7 @@ GetLine:
 
     cmp    dl,CLI_LIMIT_LEFT
     je    .getKey
-    cmp    byte [kbd_buffer_idx], 0
+    cmp    byte [cs:kbd_buffer_idx], 0
     je    .getKey
 
     dec   dl        ; Move back 1 space...
@@ -652,7 +726,7 @@ GetLine:
     ;------------------------------
 .k3:
     xor   bx, bx
-    mov   bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
+    mov   bl, [cs:kbd_buffer_idx]  ; BL = kbd_buffer_idx
     cmp   bl, SIZE_KEY_BUFFER
     je    .getKey               ; kbd_buffer_idx == kbd_buffer_size?
 
@@ -686,15 +760,19 @@ ClearKeyBuffer:
     push cx
     push si
     push di
+    push es
 
-    mov byte [kbd_buffer_idx], 0   ; Reset keyboard buffer index
+    push cs
+    pop  es                           ; Switch to code segment
+    mov byte [cs:kbd_buffer_idx], 0   ; Reset keyboard buffer index
     mov cx, SIZE_KEY_BUFFER
 
     mov di, kbd_buffer
-    mov al, ' '                    ; Fill with spaces
+    mov al, 0                         ; Fill with spaces
     cld
     repnz stosb
 
+    pop es
     pop di
     pop si
     pop cx
@@ -708,14 +786,14 @@ KeyBufferRemove:
 
     ; Decrement the current buffer index by 1
     xor    bx,bx
-    mov    bl, [kbd_buffer_idx]
+    mov    bl, [cs:kbd_buffer_idx]
     dec    bl 
-    mov   [kbd_buffer_idx], bl
+    mov   [cs:kbd_buffer_idx], bl
 
     ; Replace the character at this position with null
     mov    al, 0
-    lea    si, [kbd_buffer + bx]
-    mov   [si], al
+    lea    si, [cs:kbd_buffer + bx]
+    mov   [cs:si], al
 
     pop    ax
     pop    bx
@@ -726,12 +804,12 @@ KeyBufferInsert:
     push   di
     push   bx
 
-    mov    bl, [kbd_buffer_idx]  ; BL = kbd_buffer_idx
-    lea    di, kbd_buffer
+    mov    bl, [cs:kbd_buffer_idx]  ; BL = kbd_buffer_idx
+    lea    di, cs:kbd_buffer
     add    di, bx
-    mov   [di], al               ; Store the key pressed
-    inc    bl                    ; kbd_buffer_idx +=1 
-    mov   [kbd_buffer_idx], bl
+    mov   [cs:di], al               ; Store the key pressed
+    inc    bl                       ; kbd_buffer_idx +=1 
+    mov   [cs:kbd_buffer_idx], bl
 
     pop    bx
     pop    di
@@ -855,13 +933,21 @@ MsgDriveError:       db "Drive status: ",0
 MsgDriveWrite:       db "Writing to disk...", 0
 MsgWelcome:          db "Welcome to System23!", 0
 
-MsgStack:            db " stack ",0
-MsgDataSrc:          db "  data ",0
-MsgCode:             db "  code ",0
+MsgStack:            db "  stack ",0
+MsgDataSrc:          db "   data ",0
+MsgCode:             db "   code ",0
+MsgDiskSegment:      db "diskbuf ",0
 
 TimeString:          db "00:00:00",0
 
 PromptString:        db "@: ",0
+
+MsgFileFound:        db "File found",0
+MsgFileNotFound:     db "File not found!",0
+
+String1: db "programs",0
+String2: db "programs",0
+
 
 ;
 ; File/Directory Stuff

@@ -35,60 +35,37 @@ PutPixel:
 ;*****************************************************************************
 VgaTest:
     pusha
-    mov al, 13h
-    mov ah, 0
-    int 10h
+    push  ds
+    mov   al, 13h
+    mov   ah, 0
+    int   10h
 
 
-    ; Set bg color
-    mov ah, 0x0B
-    mov bh, 0
-    mov bl, COLOR_BLUE
-    int 10h
+    ; Switch DS to video segment
+    mov   ax,SEG_VGA
+    mov   ds,ax
+    mov   si,0x0
+    xor   bx,bx
+
+    ; Draw weird rainbow pattern
+.again:
+    mov   bx,si
+    mov   cx,si
+    and   cx,0x000f
+    ror   bx,cl
+    mov   [ds:si],bx
+    inc   si
+    cmp   si,63999
+    jne   .again
 
 
-    mov bh, 0      ; page 0
-    mov al, COLOR_LIGHT_GREEN
-    xor si, si
-    xor di, di
-    xor bl, bl
-draw_loop:
-    mov cx, si     ; CX = cols
-    mov dx, di     ; DX = rows
-    call PutPixel
+    xor   ax,ax
+    int   16h
 
-
-    inc si
-    mov bl, byte [si]     ; BL = SI
-    and bl, 0x20
-    cmp bl, 0x20
-    jne .skip
-    inc di
-.skip:
-    cmp si, 500
-    jne draw_loop
-
-draw_loop2:
-    mov cx, si     ; CX = cols
-    mov dx, di     ; DX = rows
-    call PutPixel
-
-    dec si
-    mov bl, byte [si]     ; BL = SI
-    and bl, 0x20
-    cmp bl, 0x20
-    jne .skip
-    inc di
-.skip:
-    cmp si, 0
-    jne draw_loop2
-
-    xor ax,ax
-    int 16h
-
-    mov al, VGA_MODE_TEXT
-    mov ah, 0
-    int 10h
+    mov   al, VGA_MODE_TEXT
+    mov   ah, 0
+    int   10h
+    pop   ds
     popa
     ret
 

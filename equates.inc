@@ -83,6 +83,8 @@ SIZE_SYSTEM            EQU 5    ; in sectors
 %endif
 
 FAT_RootDirSecStart  EQU FAT_RsvdSecCnt+(FAT_FATsz16 * 2)
+FAT_RootDirSectors   EQU ((FAT_RootEntCnt * 32) + (FAT_BytesPerSec - 1)) / FAT_BytesPerSec
+FAT_FirstDataSector  EQU FAT_RsvdSecCnt + (FAT_NumFATs * FAT_FATsz16) + FAT_RootDirSectors
 
 
 
