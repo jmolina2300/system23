@@ -108,8 +108,8 @@ PrintSegmentLocations:
 
     ; Print the Code, Data, and Stack addresses
     ;
-    push di               ; Save SI for later
-    push si               ; Save DI for later
+    push di               ; Save DI for later
+    push si               ; Save SI for later
 
     mov  ax,4
     call PutIndent
@@ -180,6 +180,24 @@ PrintSegmentLocations:
     ret
 
 
+
+;*****************************************************************************
+; Dir
+;
+; Description:
+;
+;   Poor man's DIR command. Lists all files in the root directory only.
+;   File sizes are printed in hex.
+;
+; Input:
+;  
+;   DS:SI = 32-byte DirEntry structure
+;
+; Output:
+;
+;   None
+;
+;*****************************************************************************
 Dir:
     pushall
     
@@ -226,8 +244,8 @@ Dir:
     je    .endOfDirectory
     cmp   byte [si], DIR_FREE
     je    .nextEntry
-    ;cmp   byte [si + OFFSET_DIR_Attr], ATTR_ARCHIVE
-    ;jne   .nextEntry
+    cmp   byte [si + OFFSET_DIR_Attr], ATTR_ARCHIVE
+    jne   .nextEntry
     
     call  DirEntryPrint
 
@@ -236,7 +254,7 @@ Dir:
     add   bx,32
     ;----
     ; Check if we reached the end of the disk buffer
-    ; If so, read another 2 blocks
+    ; If so, read another disk buffer worth of sectors
     ;----
     cmp   bx, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
     je    .nextDiskChunk
@@ -280,11 +298,14 @@ DirEntryPrint:
     mov   al,' '
     stosb
     
-    push  si
-    mov   cx, 11             ; 11 bytes for the name
-    rep   movsb              ; copy it over to DirEntrySummary
-    pop   si
-    
+    push  si                 ; Save si
+    mov   cx, 8              ; copy 8 bytes for the name
+    rep   movsb
+    stosb                    ;   space
+    mov   cx,3
+    rep   movsb              ; copy 3 bytes for the extension
+    pop   si                 ; Restore si
+
     mov   ax, ' '
     stosb
     stosb 
@@ -338,90 +359,114 @@ DirEntryPrint:
 ; 
 ; Description:
 ;
-;   Loads executables by name
+;   Loads 512-byte executables, by name, into memory at 0000:7C00
 ;
 ; Input:  
 ;
-;      DS:SI = executable name
+;    DS:SI = executable name
 ;
 ; Output:
 ;
-;      AX = 0 if successful
-;           1 if error
+;    AX = CF = 0 if successful
+;              1 if error
 ;
 ;*****************************************************************************
 LoadExecutable:
-    pushall
-
+    push  bx
+    push  cx
+    push  dx
+    push  si
+    push  di
     push  ds
-    pop   ax
-    mov  [cs:SavedSegment],ax   ; Save DS
+    push  es
 
-    
+
+
     ;----
-    ; Save the number of sectors to read
+    ; Save the number of sectors to read and number of sectors remaining
     ;----
     mov   word [cs:RemainingSecs], (FAT_RootEntCnt * 32) /  SIZE_SECTOR
     mov   word [cs:CurrentSecNum], FAT_RootDirSecStart
-.nextDiskChunk:
+.readDiskChunk:
 
     push  SEG_DISKBUFF
     pop   es
-    mov   bx, 0                  ; ES:BX = beginning of diskbuffer
+    mov   bx, 0                    ; ES:BX = beginning of diskbuffer
 
     xor   dx,dx
-    mov   ax,[cs:CurrentSecNum]     ; Set current sector num
-    mov   cx,SIZE_DISKBUFFER     ; Set number of sectors to read
-    call  DiskRead               ; Do Disk Read
+    mov   ax,[cs:CurrentSecNum]    ; Set current sector num
+    mov   cx,SIZE_DISKBUFFER       ; Set number of sectors to read
+    call  DiskRead                 ; Do Disk Read
     cmp   ah, DISK_OK
-    je    .readOK
-    call  DiskPrintStatus
-    jmp   .endOfDirectory
-    
+    jne   .errDiskError
 
 .readOK:
-
     add   word [cs:CurrentSecNum], SIZE_DISKBUFFER 
     mov   cx,[cs:RemainingSecs]    ; Increment CurrentSecNum by count of sectors we read
     sub   cx,SIZE_DISKBUFFER       ; Decrement RemainingSecs by count of sectors we read
-    jz    .endOfDirectory          ; If RemainingSecs == 0, then we are done
+    jz    .errEndOfDirectory       ; If RemainingSecs == 0, then we are done
     mov   [cs:RemainingSecs],cx    ;  Otherwise, save RemainingSecs count
 
 
 .readEntry:
-
-   
     cmp   byte [es:bx], DIR_ALL_FREE
-    je    .endOfDirectory
+    je    .errEndOfDirectory
     cmp   byte [es:bx], DIR_FREE
     je    .nextEntry
     cmp   byte [es:bx + OFFSET_DIR_Attr], ATTR_ARCHIVE
     jne   .nextEntry
     
 
-
-    ;-----------------------------------------------
-    ; Now,  SI = file we are looking for
-    ;       DI = current DIR_Name field
+    ;----
+    ; Move the offset of DIR_Name into di
     ;
-    ;-----------------------------------------------
-    mov   ax,[cs:SavedSegment]
-    push  ax
-    pop   ds
-
+    ; AX = StrNCompare(di, si, 8)
+    ;----
     mov   di,bx
-    call  StrCompareFilename
+    mov   cx,8
+    call  StrNCompare
     cmp   ax,1
     jne   .nextEntry
 
 
-    push  cs
-    pop   ds
-    mov   si,MsgFileFound
-    call  Println
+    ;----
+    ; Grab the cluster number and use it to locate the 
+    ; first data sector for this file
+    ;----
+    mov   ax,[es:bx + OFFSET_DIR_FstClusLo]  ; In:  AX = cluster number
+    call  DirLocateFirstDataSector           ; Out: AX = starting sector
+    test  ax,ax
+    jz    .errInvalidSector
 
-    call  Execute
-    jmp   .end
+    ;----
+    ; Hurray, we found the file data!
+    ;----
+    push  cs
+    pop   ds                                 ; Prepare DS for printing messages
+    mov   si,MsgFileFound
+    call  Print
+    call  PrintNumBase10
+    call  PutCrLf
+
+    ;----
+    ; Load the file into memory (1 sector of it anyway)
+    ;----
+    push  SEG_BOOT
+    pop   es
+    mov   bx,0     ; Set ES:BX to the boot sector
+    mov   cx,1     ; read 1 sector
+    ;              ; DL = drive to read from (future: make this a parameter!)
+    call  DiskRead
+    cmp   ah,DISK_OK
+    jne   .errDiskError
+
+    ;----
+    ; File loaded successfully
+    ;----
+    mov   si,MsgFileLoaded
+    call  Println
+    mov   ax,0
+    jmp   .done
 
 
 
@@ -429,30 +474,100 @@ LoadExecutable:
     add   bx,32
     ;----
     ; Check if we reached the end of the disk buffer
-    ; If so, read another 2 blocks
+    ; If so, read another disk buffer worth of sectors
     ;----
-    cmp   bx, 0 + (SIZE_DISKBUFFER * SIZE_SECTOR)
-    je    .nextDiskChunk
+    cmp   bx, (SIZE_DISKBUFFER * SIZE_SECTOR)
+    je    .readDiskChunk
     jmp   .readEntry
 
 
-.endOfDirectory:
+
+    ;----
+    ; Error cases 
+    ;
+    ; All should set AX to something other than 0
+    ;----
+.errDiskError:
+    call  DiskPrintStatus
+    mov   ax,1
+    jmp   .done
+
+.errInvalidSector:
+    push  cs
+    pop   ds
+    mov   si,MsgFileInvalidSec
+    call  Println
+    mov   ax,2
+    jmp   .done
+
+.errEndOfDirectory:
     push  cs
     pop   ds
     mov   si,MsgFileNotFound
     call  Println
+    mov   ax,3
 
-.end:
-    popall
+
+.done:
+    test  ax,ax      ; Set flags appropriately
+
+    pop   es
+    pop   ds
+    pop   di
+    pop   si
+    pop   dx
+    pop   cx
+    pop   bx
     ret
 SavedSegment:  dw 0
 
 
 
-Execute:
+;*****************************************************************************
+;
+; DirLocateFirstDataSector
+;
+;   This function locates the starting data sector given a cluster number N
+;
+;   FirstSectorOfCluster = ((N-2) * BPB_SecPerClus) + FirstDataSec
+;
+; Limitations: 
+;
+;   Input only takes the lower 16-bits of cluster N (DIR_FstClusLo), so for
+;   cluster numbers greater than 0xFFFF, this does not work.
+;
+; Input:
+;   AX = cluster number N
+;
+; Output:
+;
+;   AX = the sector number
+;      = 0, if error, or the entry is a LFN so it has no cluster
+;
+;*****************************************************************************
+DirLocateFirstDataSector:
+    push  dx
+    push  bx
+    
+    xor   dx,dx
+    sub   ax,2                    ; N - 2
+    js    .InvalidCluster         ; Too large, or the sub caused a rollover
+    mov   bx,FAT_SecPerClus
+    mul   bx                      ; * SecPerClus
+    add   ax,FAT_FirstDataSector  ; += FirstDataSec
+    test  dx,dx
+    jnz   .InvalidCluster         ; Sector number exceeded 16 bits :(
+    jmp   .Done                   ; Sector number is in AX
 
+.InvalidCluster:
+    mov   ax,0
+    jmp  .Done
+
+.Done:
+
+    pop  bx
+    pop  dx
     ret
-
 
 
 
@@ -657,6 +772,15 @@ ProcessKeyBuffer:
 .doLoad:
 
     call LoadExecutable  ; LoadExecutable(ds:si)
+    jnz  .done
+
+    xor  ax,ax
+    int  16h
+
+
+    push 0
+    push 0x7C00
+    retf
     jmp .done
 
 
@@ -942,11 +1066,12 @@ TimeString:          db "00:00:00",0
 
 PromptString:        db "@: ",0
 
-MsgFileFound:        db "File found",0
-MsgFileNotFound:     db "File not found!",0
 
-String1: db "programs",0
-String2: db "programs",0
+MsgFileLoaded:       db "File loaded",0
+MsgFileFound:        db "File found - Data sector ",0
+MsgFileNotFound:     db "File not found!",0
+MsgFileInvalidSec:   db "File data resides at an invalid sector!",0
+
 
 
 ;
@@ -959,21 +1084,7 @@ HexDigits:           db "0123456789ABCDEF"
 
 SIZE_DIR_ENTRY_SUMMARY    EQU   32
 DirEntrySummary:          times SIZE_DIR_ENTRY_SUMMARY db 0
-DirEntryReal:
-istruc DirEntry
-    at DIR_Name,          db "           "
-    at DIR_Atrr,          db 0x00
-    at DIR_NTRes,         db 0x00
-    at DIR_CrtTimeTenth,  db 0x00
-    at DIR_CrtTime,       dw 0x0000
-    at DIR_CrtDate,       dw 0x0000
-    at DIR_LstAccDate,    dw 0x0000
-    at DIR_FstClusHi,     dw 0x0000
-    at DIR_WrtTime,       dw 0x0000
-    at DIR_WrtDate,       dw 0x0000
-    at DIR_FstClusLo,     dw 0x0000
-    at DIR_FileSize,      dd 0x00000000
-iend
+
 
 
 

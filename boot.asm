@@ -29,9 +29,10 @@ BS_FilSysType:       db "FAT16   "
 start:
     cli
     mov ax, SEG_BOOT
-    mov ss, ax
     mov ds, ax
     mov es, ax
+    mov ax, SEG_STACK
+    mov ss, ax
     mov sp, 4096          ; Setup a valid stack before starting
     sti
 

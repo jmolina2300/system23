@@ -15,7 +15,6 @@
 
 
 
-
 VolumeID:
     istruc DirEntry
         at DIR_Name,          db "VolumeID   "
@@ -31,6 +30,9 @@ VolumeID:
         at DIR_FstClusLo,     dw 0x0045
         at DIR_FileSize,      dd 0xBAADFACE
     iend
+
+
+%ifdef  __TEST_DIR__
 TestFile:
     istruc DirEntry
         at DIR_Name,          db "AAAAAAAABBB"
@@ -46,8 +48,10 @@ TestFile:
         at DIR_FstClusLo,     dw 0x0003
         at DIR_FileSize,      dd 0x00000055
     iend
+%endif
+
 ;
 ; Fill the remaining directory entries with 0
 ;
-times (FAT_RootEntCnt - 2) * SIZE_DIR_ENTRY db 0
+times (FAT_RootEntCnt - 1) * SIZE_DIR_ENTRY db 0
 

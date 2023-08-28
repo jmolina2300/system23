@@ -3,16 +3,13 @@
 
 
 ;*****************************************************************************
-; StrCompareFilename - compare 2 strings 
+; StrNCompare 
 ;
-;
-; This function will return true if at least a DOS filename worth of bytes
-; were equal between the two strings 
-;
-; 
+; This function will return true (1) if at least N characters are the same
+; between string1 and string2
 ;
 ; Input:
-;
+;    CX    = number of characters
 ;    DS:SI = string1
 ;    ES:DI = string2
 ; 
@@ -23,38 +20,35 @@
 ;
 ;
 ;*****************************************************************************
-StrCompareFilename:
-    push   si
-    push   di
-    push   dx
-    push   cx
+StrNCompare:
+    push  si
+    push  di
+    push  dx
+    push  cx
     
-    xor  ax,ax
-    xor  cx,cx
+    xor   ax,ax
 .loop:
-	mov  dl, [es:di]   ; DL = next byte of DI
-	mov  al, [ds:si]   ; AL = next byte of SI
-
+	mov   dl, [es:di]   ; DL = next byte of DI
+	mov   al, [ds:si]   ; AL = next byte of SI
 
 	cmp   dl, al
-	je    .continue
-
-    cmp   cx,8      ; Not equal, but was the length at least 8?
-    jge   .equal
-    jmp   .notequal
+	jne    .checklength
 
 .continue:
     or    al,dl
-	cmp   al,0
-	je    .equal   ;  end
+	cmp   al,0         ; Did we hit the null char?
+	je    .equal
 
 	inc   di
 	inc   si
-    inc   cx
+    dec   cx
 	jmp   .loop
-	
 
-.notequal:
+
+.checklength:
+    cmp   cx,0         ; Not equal, but was the length at least cx?
+    jle   .equal
+
 	mov   al,0
     jmp   .done
 

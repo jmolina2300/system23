@@ -38,6 +38,8 @@ fat.bin: fatgen.c boot.bin
 rootdir.bin: rootdir.asm
 	$(ASM) -o rootdir.bin rootdir.asm
 
+
+
 clean:
 	rm -i -f *.bin *.o *.img fatgen
 
