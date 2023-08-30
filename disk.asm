@@ -5,6 +5,7 @@
 DISK_OK          EQU 0
 DISK_TIMEOUT     EQU 0x80
 
+DISK_RETRIES     EQU 5
 
 ;*****************************************************************************
 ; Disk Write Sectors
@@ -125,15 +126,15 @@ Int13WithRetry:
     push di
     push si
 
-    mov  di,ax           ; save function call in di
-    mov  si,cx           ; save cylinder and sector in si
-    mov  cx,3            ; number of retries in cx
+    mov  di,ax            ; save function call in di
+    mov  si,cx            ; save cylinder and sector in si
+    mov  cx,DISK_RETRIES  ; number of retries in cx
     
 .do_int13:
-    push cx              ; Save loop counter
-    mov  cx,si           ; Restore ch=cylinder,cl=sector
-    int  13h             ; BIOS diskette service
-    pop  cx              ; Restore loop counter
+    push cx               ; Save loop counter
+    mov  cx,si            ; Restore ch=cylinder,cl=sector
+    int  13h              ; BIOS diskette service
+    pop  cx               ; Restore loop counter
     jc   .time_out
     jmp  .done
 

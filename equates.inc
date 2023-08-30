@@ -79,7 +79,7 @@ SIZE_SYSTEM            EQU 5    ; in sectors
     FAT_NumHeads         EQU 2
     FAT_HiddSec          EQU 0
     FAT_TotSec32         EQU 0
-    FAT_DrvNum           EQU 0x80
+    FAT_DrvNum           EQU 0x00
 %endif
 
 FAT_RootDirSecStart  EQU FAT_RsvdSecCnt+(FAT_FATsz16 * 2)
