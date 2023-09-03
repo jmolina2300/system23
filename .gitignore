@@ -1,3 +1,7 @@
 *.img
 *.bin
 *.o
+extras/
+testfiles/
+.vscode/
+fatgen
