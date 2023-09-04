@@ -17,7 +17,7 @@
 
 VolumeID:
     istruc DirEntry
-        at DIR_Name,          db "VolumeID   "
+        at DIR_Name,          db "SYSROOT    "
         at DIR_Atrr,          db 0x28
         at DIR_NTRes,         db 0x00
         at DIR_CrtTimeTenth,  db 0x00

@@ -64,5 +64,39 @@ StrNCompare:
 
 
 
+;*****************************************************************************
+; StrLen
+;
+; Returns the length of a null-terminated string in DS:SI
+;
+; Input:
+; 
+;   DS:SI = string 
+; 
+; Output:
+;
+;   CX = Length of string
+;
+;
+;*****************************************************************************
+StrLen:
+    push  si
+    push  ax
+    
+    xor   cx,cx
+.NextChar:
+    lodsb
+    test  al,al
+    jz    .Done
+    inc   cx
+    jmp   .NextChar
+    
+.Done:
+    
+    pop   ax
+    pop   si
+    ret
+
+
 
 %endif

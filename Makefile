@@ -40,8 +40,9 @@ rootdir.bin: rootdir.asm
 
 
 
+.PHONY: clean run
 clean:
 	rm -i -f *.bin *.o *.img fatgen
 
-run: disk
+run:
 	qemu-system-x86_64 -drive format=raw,file=disk.img -m 10M

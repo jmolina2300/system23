@@ -423,8 +423,9 @@ LoadExecutable:
     ; AX = StrNCompare(di, si, 8)
     ;----
     mov   di,bx
-    mov   cx,8
-    call  StrNCompare
+    
+    call  StrLen         ; Get file path length
+    call  StrNCompare    ; See if this is the matching DIR_Name
     cmp   ax,1
     jne   .nextEntry
 
