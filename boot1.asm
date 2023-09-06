@@ -708,54 +708,56 @@ ProcessKeyBuffer:
 
     test al,al
     jz  .done
-    
-
-    ; Write command (is there anything to write in the keyboard buffer?)
-.command1:
-    cmp  al, 'w'
-    jne  .command2
-    jmp  .doWrite
 
 
-    ; Bell command
-.command2:
+.command2:           ; (b) Bell
     cmp  al, 'b'
     jne  .command3
     jmp  .doBell
 
-    ; VGA test
-.command3:
+
+.command3:           ; (v) VGA test
     cmp   al, 'v'
     jne  .command4
     jmp  .doVGA
 
-.command4:
+.command4:           ; (d) Directory listing
     cmp al, 'd'
     jne  .command5
     jmp  .doDir
 
-.command5:
-    cmp   al,'l'     ; SI = "ld program"
-    jne  .badCommand
+.command5:           ; (ld) Load Executable
+    cmp   al,'l'
+    jne  .command6
     lodsb 
-    cmp   al,'d'     ; SI = "d program"
-    jne  .badCommand
+    cmp   al,'d'
+    jne  .command6
     lodsb 
-    cmp   al,' '     ; SI = " program"
-    jne  .badCommand
-
+    cmp   al,' '
+    jne  .command6
     jmp  .doLoad
 
+.command6:           ; (pdp) Print Drive Params
+    cmp   al,'p'
+    jne  .badCommand
+    lodsb 
+    cmp   al,'d'
+    jne  .badCommand
+    lodsb 
+    cmp   al,'p'
+    jne  .badCommand
+    lodsb 
+    cmp   al,' '
+    jne  .badCommand
+    lodsb
+    cmp   al,'0'
+    jne  .badCommand
+    lodsb 
+    cmp   al,'x'
+    jne  .badCommand
+    
+    jmp  .doPDP
 
-.doWrite:
-    mov   si, MsgDriveWrite
-    call  Println
-    call  WriteKeyBufferToDisk  ; Write the keybuffer to disk
-    cmp   ah, DISK_OK
-    je    .writeOK
-    call  DiskPrintStatus       ; Print Drive status if error
-.writeOK:
-    jmp   .done
 
 .doBell:
     mov   al, ASCII_BELL
@@ -783,6 +785,40 @@ ProcessKeyBuffer:
     push 0x7C00
     retf
     jmp .done
+
+.doPDP:
+    ;---
+    ; Put Drive parameters
+    ;   DS:SI = offset of drive number string
+    ;
+    ; - Extract the drive number from whatever the user typed in
+    ; - Pass the drive number as a parameter to GetDriveParams
+    ; 
+    ;---
+    push   word [ds:si]
+    inc    si
+    push   word [ds:si]
+    
+    xor ax,ax
+    xor bx,bx
+    pop    ax
+    sub    ax,'0'   ; Obtain numeric value from ASCII number chararacter
+    
+    pop    bx
+    sub    bx,'0'
+    
+    shl    bx,4     ; BX <<=4
+    or     ax,bx
+    and    ax,0xff
+    mov    dx,ax    ; Save drive number
+    
+    call   GetDriveParams
+    jc     .done
+    
+    mov    ax,dx   ; Restore drive number
+    call   PutDriveParams
+    jmp    .done
+    
 
 
 .badCommand:
@@ -1047,15 +1083,14 @@ drvBoot:             db 0
 TestStructure:       db 41h, 42h, 43h, 44h,45h, 0
 MsgTime:             db "RTC Time: ", 0
 MsgMemorySize:       db "Lower memory available: ", 0
-MsgDriveParams:      db "Boot drive geometry ",0
-MsgDriveParams1:     db "  Drive Number: ",0
+MsgDriveParams:      db "+---- Drive Params ----+",0x0D,0x0A,"------------------------",0
+MsgDriveParams1:     db "      DriveNum: ",0
 MsgDriveParams2:     db "     Cylinders: ",0
-MsgDriveParams3:     db "         Sides: ",0
-MsgDriveParams4:     db "  SecsPerTrack: ",0
+MsgDriveParams3:     db "         Heads: ",0
+MsgDriveParams4:     db "   SecPerTrack: ",0
 MsgError:            db "An error has occurred",0
 MsgDriveError:       db "Drive status: ",0
 
-MsgDriveWrite:       db "Writing to disk...", 0
 MsgWelcome:          db "Welcome to System23!", 0
 
 MsgStack:            db "  stack ",0

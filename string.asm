@@ -18,6 +18,9 @@
 ;    AL = 1 if strings are equal
 ;       = 0 if not
 ;
+; Flags Affected: 
+;
+;    ZF
 ;
 ;*****************************************************************************
 StrNCompare:
@@ -54,8 +57,10 @@ StrNCompare:
 
 .equal:
     mov   al,1
-
+    
 .done:
+    test  al,al
+    
     pop   cx
     pop   dx
     pop   di
